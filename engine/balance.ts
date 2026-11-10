@@ -123,10 +123,9 @@ function shiftOptimize(
 }
 
 
-// Petites unités : étale les rangées de pièces sur toute la longueur de chaque zone (écarts égaux, y compris aux extrémités)
-// pour répartir le poids également. Les rangées gardent leur ordre (donc l'ordre de livraison). Appliqué seulement si toutes les
-// rangées de la zone sont courtes et qu'aucune pièce n'est verrouillée ; refusé si le résultat est moins conforme.
-const SMALL_ROW_MM = 2000;
+// Étale les rangées de pièces sur toute la longueur de chaque zone (écarts égaux, y compris aux extrémités) pour répartir le poids
+// et éviter que tout se retrouve à l'arrière. Les rangées gardent leur ordre (donc l'ordre de livraison). Appliqué seulement si aucune
+// pièce de la zone n'est verrouillée ; refusé si le résultat est moins conforme (essieux, catégorie).
 export function spreadSmall(
   placed: Placed[],
   zones: { x: number; l: number }[],
@@ -138,7 +137,7 @@ export function spreadSmall(
   let changed = false;
   for (let zi = 0; zi < zones.length; zi++) {
     const ps = cur.filter((p) => (p.zi ?? 0) === zi && !p.over);
-    if (ps.length < 2 || ps.some((p) => p.locked)) continue;
+    if (ps.length < 1 || ps.some((p) => p.locked)) continue;
     const left = new Set(ps), rows: Placed[][] = [];
     while (left.size) {
       const first = left.values().next().value as Placed;
@@ -148,7 +147,6 @@ export function spreadSmall(
       rows.push(cl);
     }
     const ext = rows.map((r) => ({ r, lo: Math.min(...r.map((p) => p.x)), hi: Math.max(...r.map((p) => p.x + p.pl)) }));
-    if (ext.length < 2 || ext.some((e) => e.hi - e.lo > SMALL_ROW_MM)) continue;
     ext.sort((a, b) => a.lo - b.lo);
     const used = ext.reduce((s, e) => s + (e.hi - e.lo), 0), free = zones[zi].l - used;
     if (free <= 0) continue;
