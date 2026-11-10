@@ -1,0 +1,30 @@
+# À placer sur la VPS (par exemple /opt/slscload/docker-compose.yml), à côté d'un fichier .env :
+#   ADMIN_USER=steve
+#   ADMIN_PASSWORD=un-mot-de-passe-solide
+services:
+  app:
+    image: ghcr.io/corbeils/slscload:latest
+    container_name: slscload
+    restart: unless-stopped
+    environment:
+      ADMIN_USER: ${ADMIN_USER:-}          # crée l'administrateur au premier démarrage seulement
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    volumes:
+      - slscload-data:/data
+    ports:
+      - "127.0.0.1:3000:3000"              # exposé seulement en local : mettre un proxy HTTPS devant (Caddy, Traefik, nginx)
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+
+  # Met à jour le conteneur automatiquement quand une nouvelle image est publiée sur GitHub.
+  watchtower:
+    image: containrrr/watchtower
+    container_name: slscload-watchtower
+    restart: unless-stopped
+    command: --label-enable --interval 60 --cleanup
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/.docker/config.json:/config.json:ro   # pour tirer l'image privée de ghcr.io (voir docs/deploiement.md)
+
+volumes:
+  slscload-data:
