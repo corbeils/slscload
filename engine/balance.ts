@@ -122,6 +122,52 @@ function shiftOptimize(
   return { placed: cur, score: best };
 }
 
+
+// Petites unités : étale les rangées de pièces sur toute la longueur de chaque zone (écarts égaux, y compris aux extrémités)
+// pour répartir le poids également. Les rangées gardent leur ordre (donc l'ordre de livraison). Appliqué seulement si toutes les
+// rangées de la zone sont courtes et qu'aucune pièce n'est verrouillée ; refusé si le résultat est moins conforme.
+const SMALL_ROW_MM = 2000;
+export function spreadSmall(
+  placed: Placed[],
+  zones: { x: number; l: number }[],
+  ctx: Ctx,
+  front: number,
+  floor: (p: Placed) => number,
+): { placed: Placed[]; front: number } {
+  let cur = placed.map((p) => ({ ...p }));
+  let changed = false;
+  for (let zi = 0; zi < zones.length; zi++) {
+    const ps = cur.filter((p) => (p.zi ?? 0) === zi && !p.over);
+    if (ps.length < 2 || ps.some((p) => p.locked)) continue;
+    const left = new Set(ps), rows: Placed[][] = [];
+    while (left.size) {
+      const first = left.values().next().value as Placed;
+      left.delete(first);
+      const cl = [first];
+      for (let i = 0; i < cl.length; i++) for (const q of [...left]) if (q.x < cl[i].x + cl[i].pl && cl[i].x < q.x + q.pl) { left.delete(q); cl.push(q); }
+      rows.push(cl);
+    }
+    const ext = rows.map((r) => ({ r, lo: Math.min(...r.map((p) => p.x)), hi: Math.max(...r.map((p) => p.x + p.pl)) }));
+    if (ext.length < 2 || ext.some((e) => e.hi - e.lo > SMALL_ROW_MM)) continue;
+    ext.sort((a, b) => a.lo - b.lo);
+    const used = ext.reduce((s, e) => s + (e.hi - e.lo), 0), free = zones[zi].l - used;
+    if (free <= 0) continue;
+    const gap = free / (ext.length + 1);
+    let x = zones[zi].x + gap;
+    for (const e of ext) {
+      const d = Math.round((x - e.lo) / 10) * 10;
+      for (const p of e.r) p.x += d;
+      x += e.hi - e.lo + gap;
+    }
+    changed = true;
+  }
+  if (!changed || !validLayout(cur, () => true, floor)) return { placed, front };
+  const s1 = score(placed, ctx, front);
+  let bf = front, bs = Infinity;
+  for (const f of slides(ctx)) { const s = score(cur, ctx, f); if (s < bs) { bs = s; bf = f; } }
+  return Math.floor(bs) <= Math.floor(s1) ? { placed: cur, front: bf } : { placed, front };
+}
+
 type Best = { pen: number; placed: Placed[]; rejected: { item: Item; reason: string }[]; front: number };
 const SORTS = ['area', 'kgdesc', 'kgasc'] as const;
 
@@ -138,7 +184,8 @@ export function balanceClosed(space: Space, items: Item[], locked: Placed[], ctx
     }
   }
   const b = best as Best;
-  return { placed: b.placed, rejected: b.rejected, front: b.front, flags: [] as string[] };
+  const sp2 = spreadSmall(b.placed, [{ x: 0, l: space.l }], ctx, b.front, () => 0);
+  return { placed: sp2.placed, rejected: b.rejected, front: sp2.front, flags: [] as string[] };
 }
 
 // Plateau, step deck, fardier : mêmes principes, par zone.
@@ -156,5 +203,6 @@ export function balanceOpen(sp: OpenSpace, items: Item[], locked: Placed[], ctx:
     }
   }
   const b = best as Best;
-  return { placed: b.placed, rejected: b.rejected, front: b.front, flags: openFlags(b.placed, sp) };
+  const sp2 = spreadSmall(b.placed, zones, ctx, b.front, floor);
+  return { placed: sp2.placed, rejected: b.rejected, front: sp2.front, flags: openFlags(sp2.placed, sp) };
 }
