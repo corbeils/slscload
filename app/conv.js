@@ -1,0 +1,4 @@
+const IMP_K=2.20462;
+function fmtLen(mm){const t=Math.round(mm/25.4),f=Math.floor(t/12),i=t-f*12;return f>0?f+"' "+i+'"':i+'"'}
+function convText(s){return String(s).replace(/(\d+(?:[  ]\d{3})*(?:,\d+)?)\s?(mm|kg|m)(?![\w'])/g,(a,n,u)=>{const v=parseFloat(n.replace(/[  ]/g,"").replace(",","."));if(isNaN(v))return a;return u==="kg"?Math.round(v*IMP_K)+" lb":fmtLen(u==="m"?v*1000:v)})}
+const REMINDERS=["Vérifier l’arrimage avant le départ et dans les 80 km suivant le chargement, puis après tout changement de quart, 3 heures de route ou 240 km.","Garder les attaches tendues sur la voie publique.","Le système d’arrimage doit retenir 50 % du poids vers les côtés, 80 % vers l’avant et 20 % vers le haut si la cargaison n’est pas entièrement contenue.","Source : Guide d’arrimage du ministère (édition 2017, pp. 13, 15, 19) ; à valider avec l’édition en vigueur."];

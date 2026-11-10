@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Planificateur de chargement – démo</title>
+<style>
+:root{--bg:#f6f5f1;--fg:#1d1d1b;--mut:#6b6a64;--card:#fff;--bd:#dcdad2;--ok:#2e7d4f;--bad:#c0392b;--acc:#2c6fd6;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1b19;--fg:#ecebe5;--mut:#9d9c94;--card:#262624;--bd:#3a3a36;--ok:#5cc189;--bad:#ef7a6c;--acc:#6aa3f5;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1b1b19;--fg:#ecebe5;--mut:#9d9c94;--card:#262624;--bd:#3a3a36;--ok:#5cc189;--bad:#ef7a6c;--acc:#6aa3f5;color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:980px;margin:0 auto;padding:16px}h1{font-size:19px;margin:0 0 12px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px}
+select,button,input{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:7px 10px}button{cursor:pointer}
+input[type=checkbox]{padding:0;width:16px;height:16px;vertical-align:-3px;margin-right:4px}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+button:disabled,select:disabled{opacity:.5}
+#view{background:var(--card);border:1px solid var(--bd);border-radius:12px;height:360px;cursor:grab;overflow:hidden;touch-action:none}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px}.card h2{font-size:14px;margin:0 0 8px;color:var(--mut);font-weight:600}
+.bar{height:10px;background:var(--bd);border-radius:5px;overflow:hidden;margin:3px 0 9px}.bar i{display:block;height:100%}
+.l{display:flex;justify-content:space-between;font-size:13px;gap:8px}.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
+[hidden]{display:none!important}button.ovr-on{background:var(--bad)!important;border-color:var(--bad)!important;color:#fff!important;font-weight:700}.tbl{border-collapse:collapse;width:100%;font-size:13px}.tbl th,.tbl td{padding:5px 6px;text-align:left;border-bottom:1px solid var(--bd);vertical-align:middle}.tbl th{color:var(--mut);font-weight:600}.fl{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:2px}.fl input,.fl select{color:var(--fg)}.bad{color:var(--bad)}#lfr{width:100%;height:82vh;min-height:560px;border:1px solid var(--bd);border-radius:12px;background:var(--card)}
+small,.mut{color:var(--mut)}
+#crates table{border-collapse:collapse;font-size:13px;width:100%}#crates td,#crates th{padding:3px 4px;text-align:left;white-space:nowrap}#crates th{color:var(--mut);font-weight:600}#crates input[type=text],#crates input[type=number]{padding:4px 6px;width:70px}#crates input.nm{width:130px}#crates input.id{width:84px;font-weight:700}#crates input.st{width:46px}#crates button{padding:3px 8px}ul{margin:0;padding-left:18px}
+</style></head><body><main>
+<div class="row" style="justify-content:space-between"><h1 style="margin:0">Planificateur de chargement</h1><span><span id="rolelbl" class="mut" style="font-size:13px;margin-right:8px"></span><button id="unt"></button> <button id="thm"></button></span></div>
+<div class="row" id="tabs" hidden><button data-tab="plan" id="t-plan" class="pri">Planificateur</button><button data-tab="proj" id="t-proj">Projets</button><button data-tab="admin" id="t-admin" hidden>Admin</button></div>
+<div id="v-plan">
+<div class="row">
+<select id="eq" aria-label="Équipement"></select>
+<select id="cfg" aria-label="Essieux de la remorque"></select>
+<label class="mut"><input type="checkbox" id="lift">Autovireur relevé</label>
+<select id="season" aria-label="Période"><option value="normal">Période normale</option><option value="degel">Période de dégel</option></select>
+<select id="tires" aria-label="Pneus"><option value="dual">Pneus doubles</option><option value="single">Pneus simples (−1 000 kg/essieu, hypothèse)</option><option value="wide">Pneus bande large</option></select>
+</div>
+<div class="row">
+<label class="mut"><input type="checkbox" id="auto" checked>Équilibrage auto</label>
+<select id="tdn" aria-label="Attache utilisée" title="Attache utilisée pour calculer l’arrimage"></select>
+<button id="ovr" aria-pressed="false" title="Permet de placer des caisses qui dépassent le poids ou les dimensions, avec un avis en rouge">OVERRIDE WEIGHT AND DIMS : OFF</button>
+</div>
+<div class="row"><input id="proj" type="text" placeholder="N° de projet / chargement" style="width:240px" aria-label="N° de projet">
+<button id="save" class="pri">SAVE</button><button id="new">NEW</button><button id="pdf">Exporter en PDF (3 vues)</button><button id="shr">Vue chargeur à partager (.html)</button></div>
+<div class="row" hidden><label class="mut">1er essieu arrière <input id="sl" type="range" style="width:190px;padding:0"> <span id="slv"></span></label></div>
+<div id="view"></div>
+<p class="mut" style="font-size:13px;margin:6px 0 0">Glisser le fond = tourner · glisser une pièce = la déplacer (elle se verrouille, repère noir) · portes à droite ·
+lignes : <span class="sw" style="background:#2c6fd6"></span>attelage <span class="sw" style="background:#d63a2c"></span>essieux <span class="sw" style="background:#e0a020"></span>autovireur (devant le tridem ; gris = relevé) ·
+<span class="sw" style="background:#e07a3f"></span>arrêt 1 <span class="sw" style="background:#3f8fe0"></span>arrêt 2 <span class="sw" style="background:#4fb06d"></span>arrêt 3</p>
+<div class="card" style="margin-top:12px"><h2>Caisses du projet <span id="ctot" class="mut" style="font-weight:400"></span></h2>
+<div style="overflow-x:auto"><div id="crates"></div></div>
+<div class="row" style="margin:8px 0 0"><button id="add" class="pri">+ Ajouter une caisse</button><span id="cmsg" style="color:var(--bad);font-size:13px"></span></div>
+<small>Le N° choisi s’affiche sur chaque caisse dans le dessin, dans les alertes et dans l’arrimage. Dimensions en mm, poids en kg. Une caisse déplacée à la main reste verrouillée tant que ses valeurs ne changent pas.</small></div>
+<div class="grid"><div class="card"><h2>Charges par essieu</h2><div id="ax"></div><div class="mut" id="tot"></div></div>
+<div class="card"><h2>Alertes</h2><ul id="wr"></ul></div>
+<div class="card"><h2>Arrimage</h2><div id="sec"></div></div>
+<div class="card" style="margin-top:12px"><h2>Permis spécial de circulation</h2><div id="perm"></div></div></div>
+<p class="mut" style="font-size:12px;margin-top:12px">Règles : Guide des normes de charges et dimensions, édition 2026 (MTMD Québec), tableaux 1 et 2 et §3.1.6. Le guide est indicatif : le règlement fait foi. Tracteur 6x4, direction de 6 000 kg (PNBE supposé).</p>
+</div>
+<div id="v-proj" hidden></div>
+<div id="v-admin" hidden></div>
+<div id="v-load" hidden><div class="row"><button id="lback">← Projets</button><b id="lttl"></b><button id="lpdf">PDF</button></div><iframe id="lfr" title="Vue chargeur" sandbox="allow-scripts"></iframe></div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+/*ENGINE*/
+const CFG=Engine.AXLE_CFGS;
+let lastPerm={need:false,lines:[]};
+function permitCalc(s,placed,rows,spilled,degel){
+ const L=[];let need=false;
+ const wOver=rows.some(x=>!x.ok)||spilled;
+ let W=0,H=0,rear=0,front=0,legW=s.open?s.legalW:s.w,legH=s.open?s.legalH:s.h;
+ if(s.open){const tl=Math.max(...s.zones.map(z=>z.x+z.l));placed.filter(p=>!p.over).forEach(p=>{const z=s.zones[p.zi||0]||s.zones[0];W=Math.max(W,Math.max(p.y+p.pw,z.w)-Math.min(p.y,0));H=Math.max(H,p.z+p.h);rear=Math.max(rear,p.x+p.pl-tl);front=Math.max(front,-p.x)});W=Math.max(W,0)}
+ const wide=s.open&&W>legW,tall=s.open&&H>legH;
+ if(!wide&&!tall&&!wOver){return{need:false,lines:["Aucun permis spécial requis selon les dimensions et les masses calculées (les limites de base sont respectées)."]}}
+ need=true;
+ const m2=v=>(v/1000).toFixed(2).replace(".",",")+" m";
+ if(wide||tall){
+  L.push("Dimensions : largeur "+m2(W)+(wide?" (limite "+m2(legW)+")":"")+", hauteur "+m2(H)+(tall?" (limite "+m2(legH)+")":"")+(rear>0?", excédent arrière "+m2(rear):"")+(front>0?", excédent avant "+m2(front):"")+".");
+  const big=W>5000||H>5000||rear>4000||front>2000;
+  const gen=W<=4400&&H<=4300&&rear<=4000&&front<=2000;
+  L.push(big?"Classe 7 (expertise du Ministère) : les dimensions dépassent celles d’un permis de classe 1.":"Classe 1, permis "+(gen?"général ou spécifique.":"spécifique seulement (largeur ou hauteur au-delà de 4,40 m / 4,30 m)."));
+  const esc=[];
+  if(W>4400)esc.push("2 escortes (avant et arrière) sur route à une seule voie par sens");
+  if(W>3750)esc.push("escorte arrière sur route à plusieurs voies par sens"+(W<=4400?" ; escorte avant sur route à une seule voie":""));
+  else if(W>3100)esc.push("escorte avant la nuit sur route à une seule voie par sens");
+  if(H>4500)esc.push("escorte avant (hauteur de plus de 4,50 m)");
+  if(rear>4000)esc.push("escorte arrière (excédent arrière de plus de 4 m)");
+  if(front>2000)esc.push("escorte avant (excédent avant de plus de 2 m)");
+  L.push(esc.length?"Escortes (art. 8) : "+esc.join(" ; ")+".":"Aucune escorte requise selon l’art. 8.");
+  const sg=[];if(W>3040||H>4300)sg.push("panneaux « convoi exceptionnel » avant et arrière (art. 7, annexe 2)");
+  if(W>legW+600)sg.push("drapeaux ou feux jaunes aux extrémités du chargement qui dépasse de plus de 30 cm");
+  L.push("Signalisation : feu jaune rotatif visible à 300 m (art. 7)"+(sg.length?" ; "+sg.join(" ; "):"")+".");
+  if(W>3750||rear>4000)L.push("Interdit la nuit, le dimanche et les jours fériés (art. 11), sauf autorisation du ministre en classe 7"+(W<=4400?" ; la nuit, tolérance jusqu’à 4,40 m sur autoroute à chaussées séparées ou sur au plus 8 km":"")+"; heures de pointe interdites à Québec et à Montréal, sauf le samedi (art. 12).");
+  else L.push("Visibilité d’au moins 1 km et chaussée dégagée exigées (art. 11).");
+  if(tall){L.push("Hauteur hors norme : l’ensemble doit comprendre une semi-remorque surbaissée ou une plate-forme à au plus 1 m du sol, sauf mention contraire au permis (art. 5, par. 11).")}
+ }
+ if(wOver){L.push("Masse : une limite de masse est dépassée"+(spilled?" ou une pièce est hors de la remorque":"")+". Classe 5 si le chargement est indivisible et dans les maxima de l’annexe 1, sinon classe 6 (expertise du Ministère).");
+  if(degel)L.push("Période de dégel : classes 5 et 6 interdites de circuler (art. 5, par. 7, et art. 2).")}
+ L.push("Conditions de base : chargement indivisible, qui ne peut être divisé pour respecter les normes (art. 5, par. 4) ; phares allumés ; le titulaire s’assure que le réseau routier permet le passage (art. 5). Conditions additionnelles possibles au permis (annexe 3).");
+ return{need,lines:L}}
+let TD0=[],TD=[],tdSel="",TDOCS=null,lastSec=[];
+let ovr=false,imp=false,lastTot="",dirty=false,confirmNew=false,lastReady=false;
+const IMP_K=2.20462;
+function fmtLen(mm){const t=Math.round(mm/25.4),f=Math.floor(t/12),i=t-f*12;return f>0?f+"' "+i+'"':i+'"'}
+function convText(s){return String(s).replace(/(\d+(?:[  ]\d{3})*(?:,\d+)?)\s?(mm|kg|m)(?![\w'])/g,(a,n,u)=>{const v=parseFloat(n.replace(/[  ]/g,"").replace(",","."));if(isNaN(v))return a;return u==="kg"?Math.round(v*IMP_K)+" lb":fmtLen(u==="m"?v*1000:v)})}
+const REMINDERS=["Vérifier l’arrimage avant le départ et dans les 80 km suivant le chargement, puis après tout changement de quart, 3 heures de route ou 240 km.","Garder les attaches tendues sur la voie publique.","Le système d’arrimage doit retenir 50 % du poids vers les côtés, 80 % vers l’avant et 20 % vers le haut si la cargaison n’est pas entièrement contenue.","Source : Guide d’arrimage du ministère (édition 2017, pp. 13, 15, 19) ; à valider avec l’édition en vigueur."];
+const cv=s=>imp?convText(s):s;
+const wllNow=()=>{const x=TD.find(y=>y.id===tdSel)||TD[0];return x?x.wll:2268},tdName=()=>{const x=TD.find(y=>y.id===tdSel)||TD[0];return x?x.n:"Aucune attache définie (min. du guide 2 268 kg)"};
+function fillTd(){const e=$("tdn");e.innerHTML=!TD.length?`<option value="">Aucune attache (à définir dans Admin)</option>`:TD.map(x=>`<option value="${esc(x.id)}">${esc(x.n)} (${esc(cv(x.wll+" kg"))})</option>`).join("");e.value=tdSel}
+const disp=(f,v)=>imp?(f==="kg"?Math.round(v*IMP_K):Math.round(v/25.4*10)/10):v;
+const du=(v,ty)=>ty==="len"?disp("l",v):ty==="kg"?disp("kg",v):v,pu=(x,ty)=>imp?(ty==="len"?Math.round(x*25.4):ty==="kg"?Math.round(x/IMP_K):x):x;
+const ulab=s=>imp?s.replace("(mm)","(po)").replace("(kg)","(lb)"):s;
+let EQ={
+ c20:{n:"Conteneur 20’",l:5898,w:2352,h:2393,kg:24000,rig:{kingpinX:900,tandemX:4700,trailerTareKg:4800,trailerCogX:3000},s:[4000,5200]},
+ c40:{n:"Conteneur 40’",l:12032,w:2352,h:2393,kg:26500,rig:{kingpinX:1100,tandemX:10400,trailerTareKg:7000,trailerCogX:6000},s:[9500,11300]},
+ c40h:{n:"Conteneur 40’ HC",l:12032,w:2352,h:2698,kg:26500,rig:{kingpinX:1100,tandemX:10400,trailerTareKg:7200,trailerCogX:6000},s:[9500,11300]},
+ v53:{n:"Remorque fermée 53’",l:16000,w:2480,h:2700,kg:20000,rig:{kingpinX:1100,tandemX:14000,trailerTareKg:6800,trailerCogX:8500},s:[12500,15000]},
+ fb:{n:"Plateau 48’",open:1,legalH:4150,legalW:2600,kg:21000,zones:[{name:"Plancher",x:0,z:1500,l:14630,w:2600}],rig:{kingpinX:1100,tandemX:12800,trailerTareKg:6800,trailerCogX:7300},s:[11000,13500]},
+ fb53:{n:"Plateau 53’",open:1,legalH:4150,legalW:2600,kg:20500,zones:[{name:"Plancher",x:0,z:1500,l:16150,w:2600}],rig:{kingpinX:1100,tandemX:14300,trailerTareKg:7400,trailerCogX:8100},s:[12000,14500]},
+ sd53:{n:"Step deck 53’",open:1,legalH:4150,legalW:2600,kg:19000,zones:[{name:"Niveau haut",x:0,z:1600,l:3350,w:2600},{name:"Niveau bas",x:3350,z:1100,l:12800,w:2600}],rig:{kingpinX:1100,tandemX:14300,trailerTareKg:8400,trailerCogX:8400},s:[12000,14500]},
+ sd:{n:"Step deck 48’",open:1,legalH:4150,legalW:2600,kg:20000,zones:[{name:"Niveau haut",x:0,z:1600,l:3050,w:2600},{name:"Niveau bas",x:3050,z:1100,l:11580,w:2600}],rig:{kingpinX:1100,tandemX:12900,trailerTareKg:7600,trailerCogX:7600},s:[11000,13500]},
+ dd:{n:"Double drop (fardier)",open:1,legalH:4150,legalW:2600,kg:18000,zones:[{name:"Avant",x:0,z:1600,l:3050,w:2600},{name:"Puits",x:3050,z:500,l:8500,w:2600},{name:"Arrière",x:11550,z:1600,l:3050,w:2600}],rig:{kingpinX:1100,tandemX:12900,trailerTareKg:9500,trailerCogX:7500},s:[11000,13500]},
+ rgn:{n:"Fardier RGN",open:1,legalH:4150,legalW:2600,kg:17000,zones:[{name:"Puits",x:0,z:800,l:9800,w:2600},{name:"Arrière",x:9800,z:1500,l:3600,w:2600}],rig:{kingpinX:900,tandemX:12300,trailerTareKg:11000,trailerCogX:6500},s:[10500,13000]}};
+const TR={wheelbase:4400,fifthWheel:4000,steerTareKg:4600,driveTareKg:3600},STEER_RATED=6000;
+const COL=[0,0xe07a3f,0x3f8fe0,0x4fb06d],$=i=>document.getElementById(i);
+const T=[["Palette",1200,1000,1000,600,1,1],["Caisse",2200,1100,1100,1800,0,1],["Boîte",800,600,700,180,1,1],["Machine",3000,1400,1500,4200,0,1]];
+const T2=[["Machine",3000,1400,1500,4200,0,0],["Bâti",4500,1800,1900,6500,0,0],["Moteur",1800,1200,1300,2200,0,1],["Presse",5000,2900,2400,9000,0,0],["Caisse",2200,1100,1100,1800,0,1]];
+const dims=s=>s.open?{l:Math.max(...s.zones.map(z=>z.x+z.l)),w:s.legalW,h:s.legalH}:{l:s.l,w:s.w,h:s.h};
+const openSp=s=>({zones:s.zones,legalH:s.legalH,legalW:s.legalW,maxKg:ovr?1e12:s.kg}),closedSp=s=>({l:s.l,w:s.w,h:s.h,maxKg:ovr?1e12:s.kg});
+function closedFlags(pl,s){const f=[];for(const p of pl){if(p.over)continue;const o=[];if(p.x<0||p.x+p.pl>s.l)o.push("longueur");if(p.y<0||p.y+p.pw>s.w)o.push("largeur");if(p.z+p.h>s.h)o.push("hauteur");if(o.length)f.push(`${p.id} ${p.name} : dépasse (${o.join(", ")}).`)}return f}
+let seed=7,res,cur,inner,meshes=[];const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+const typeOf=n=>["Machine","Presse","Bâti"].includes(n)?"machine":"colis";
+function gen0(){const o=EQ[cur]&&EQ[cur].open,TT=o?T2:T,n=o?5:20,a=[];for(let i=0;i<n;i++){const t=TT[Math.floor(rnd()*TT.length)];a.push({id:String(i+1),type:typeOf(t[0]),blocked:false,name:t[0],l:t[1],w:t[2],h:t[3],kg:t[4],stackable:!!t[5],rotate:!!t[6],stop:1+Math.floor(rnd()*3)})}return a}
+let items=[],lockSig={};
+const sig=i=>[i.id,i.l,i.w,i.h,i.kg,i.stackable,i.rotate,i.stop].join("|");
+const esc=s=>String(s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+const msg=(m,good)=>{const e=$("cmsg");e.textContent=m||"";if(e.style)e.style.color=good?"var(--ok)":"var(--bad)"};
+function label(p){try{const c=document.createElement("canvas");c.width=256;c.height=128;const g=c.getContext("2d");
+ let fs=76;g.font="bold "+fs+"px system-ui,sans-serif";const tw=g.measureText(p.id).width;if(tw>220){fs=Math.floor(fs*220/tw);g.font="bold "+fs+"px system-ui,sans-serif"}
+ g.fillStyle="rgba(255,255,255,.93)";g.strokeStyle="#111";g.lineWidth=5;g.beginPath();g.roundRect?g.roundRect(8,14,240,100,18):g.rect(8,14,240,100);g.fill();g.stroke();
+ g.fillStyle="#111";g.textAlign="center";g.textBaseline="middle";g.fillText(p.id,128,66);
+ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),depthTest:false,transparent:true}));
+ const w=Math.max(.7,Math.min(1.5,Math.min(p.pl,p.pw)/1e3*.9));sp.scale.set(w,w/2,1);sp.position.set(0,p.h/2e3,0);sp.renderOrder=10;return sp}catch(e){return null}}
+function renderCrates(){const r=(i,it)=>`<tr><td><input class="id" type="text" data-i="${i}" data-f="id" value="${esc(it.id)}" aria-label="N° de caisse"></td><td><input class="nm" type="text" data-i="${i}" data-f="name" value="${esc(it.name)}" aria-label="Désignation"></td>`+
+  ["l","w","h","kg"].map(f=>`<td><input type="number" min="0.1" step="${imp?"any":"10"}" data-i="${i}" data-f="${f}" value="${disp(f,it[f])}" aria-label="${f}"></td>`).join("")+
+  `<td><select data-i="${i}" data-f="type" aria-label="Type"><option value="colis" ${it.type!=="machine"?"selected":""}>Colis</option><option value="machine" ${it.type==="machine"?"selected":""}>Machine</option></select></td><td><input type="checkbox" data-i="${i}" data-f="blocked" ${it.blocked?"checked":""} aria-label="Calée vers l’avant"></td><td><input type="checkbox" data-i="${i}" data-f="stackable" ${it.stackable?"checked":""} aria-label="Empilable"></td><td><input type="checkbox" data-i="${i}" data-f="rotate" ${it.rotate?"checked":""} aria-label="Rotation permise"></td><td><input class="st" type="number" min="1" max="3" data-i="${i}" data-f="stop" value="${it.stop}" aria-label="Arrêt"></td><td><span class="sw" style="background:#${COL[it.stop].toString(16).padStart(6,"0")}"></span><span id="st${i}" class="mut"></span></td><td><button data-del="${i}" aria-label="Supprimer">×</button></td></tr>`;
+ $("crates").innerHTML=items.length?`<table><tr><th>N°</th><th>Désignation</th><th>Long. (${imp?"po":"mm"})</th><th>Larg. (${imp?"po":"mm"})</th><th>Haut. (${imp?"po":"mm"})</th><th>${imp?"lb":"kg"}</th><th>Type</th><th>Calée av.</th><th>Empil.</th><th>Rot.</th><th>Arrêt</th><th>État</th><th></th></tr>`+items.map((it,i)=>r(i,it)).join("")+`</table>`:"<span class=\"mut\">Aucune caisse. Ajoute-en une.</span>"}
+function sample(){return gen0()}
+function nextId(){let n=0;for(const i of items){const v=parseInt(i.id,10);if(!isNaN(v))n=Math.max(n,v)}let id=String(n+1);while(items.some(i=>i.id===id))id=String(+id+1);return id}
+function newShipment(force){
+ if(!force&&dirty&&items.length&&!confirmNew){confirmNew=true;msg("Modifications non enregistrées : clique encore sur NEW pour tout effacer, ou sur SAVE pour les garder.");setTimeout(()=>{confirmNew=false},6000);return}
+ confirmNew=false;dirty=false;items=[];lockSig={};curProj=null;$("proj").value="";$("eq").value="";$("cfg").value="";$("lift").checked=false;$("season").value="normal";$("tires").value="dual";
+ setOvr(false,false);setEq();msg("Nouvelle expédition vide.",true);if(typeof show==="function")show("plan")}
+function setUnits(v){imp=!!v;try{localStorage.setItem("unt",imp?"imp":"met")}catch(e){}const b=$("unt");b.textContent="Unités : "+(imp?"impérial":"métrique");fillTd();renderCrates();if(res)ax();if(curTab==="proj")renderProj();if(curTab==="admin")renderAdmin()}
+const ovrAllowed=()=>!(typeof EQ!=="undefined"&&cur&&EQ[cur])||EQ[cur].ovrOk!==false;
+function syncOvr(){const b=$("ovr");if(!b)return;const ok=ovrAllowed();b.disabled=!ok;b.title=ok?"Permet de placer des caisses qui dépassent le poids ou les dimensions, avec un avis en rouge":"Cet équipement n’autorise pas le dépassement du poids ou des dimensions"}
+function setOvr(v,re){if(v&&!ovrAllowed())v=false;ovr=!!v;syncOvr();const b=$("ovr");b.textContent="OVERRIDE WEIGHT AND DIMS : "+(ovr?"ON":"OFF");if(b.setAttribute)b.setAttribute("aria-pressed",String(ovr));if(b.classList)b.classList.toggle("ovr-on",ovr);if(re&&res)relayout()}
+function relayout(clear){if(!clear)dirty=true;if(!ready()){res={placed:[],rejected:[],flags:[]};build();ax();return}
+const s=EQ[cur];
+ const keep=clear||!res?[]:res.placed.filter(p=>p.locked&&items.some(i=>i.id===p.id&&sig(i)===lockSig[p.id]));
+ const free=items.filter(i=>!keep.some(k=>k.id===i.id));
+ if($("auto").checked){res={placed:keep,rejected:free.map(item=>({item,reason:"Aucune position valide"})),flags:[]};balance()}
+ else{const o={fixed:keep},r=s.open?(ovr?Engine.packOpenAny:Engine.packOpen)(openSp(s),free,o):(ovr?Engine.packAny:Engine.pack)(closedSp(s),free,o);res={placed:r.placed,rejected:r.rejected,flags:r.flags||[]};build();ax()}}
+{const o=document.createElement("option");o.value="";o.textContent="Choisir un équipement…";$("eq").appendChild(o)}
+{const o=document.createElement("option");o.value="";o.textContent="Type d’essieux de la remorque…";$("cfg").appendChild(o)}
+for(const k in EQ){const o=document.createElement("option");o.value=k;o.textContent=EQ[k].n;$("eq").appendChild(o)}
+for(const k in CFG){const o=document.createElement("option");o.value=k;o.textContent=CFG[k].name;$("cfg").appendChild(o)}
+const view=$("view"),ren=new THREE.WebGLRenderer({antialias:true,alpha:true}),sc=new THREE.Scene(),cam=new THREE.PerspectiveCamera(40,1,.1,200),grp=new THREE.Group();
+view.appendChild(ren.domElement);sc.add(grp);let ry=-.6,rx=.35,dist=22;
+function size(){const w=view.clientWidth,h=view.clientHeight;ren.setSize(w,h);ren.setPixelRatio(devicePixelRatio);cam.aspect=w/h;cam.updateProjectionMatrix()}
+function draw(){grp.rotation.set(rx,ry,0);cam.position.set(0,0,dist);ren.render(sc,cam)}
+function mesh(x,y,z,l,w,h,mat,edge){const g=new THREE.BoxGeometry(l/1e3,h/1e3,w/1e3),m=new THREE.Mesh(g,mat);m.position.set((x+l/2)/1e3,(z+h/2)/1e3,(y+w/2)/1e3);
+ const e=new THREE.LineSegments(new THREE.EdgesGeometry(g),new THREE.LineBasicMaterial({color:edge,transparent:true,opacity:.5}));m.add(e);return m}
+const cfgNow=()=>CFG[$("cfg").value],liftNow=()=>{const c=cfgNow();return $("lift").checked&&!!(c&&c.selfSteer)};
+const ready=()=>!!(cur&&EQ[cur]&&CFG[$("cfg").value]);
+function ctx(slide){const s=EQ[cur],c={base:{...s.rig,...TR},cfg:cfgNow(),lifted:liftNow(),reg:{season:$("season").value||"normal",tires:$("tires").value||"dual",steerRated:STEER_RATED},L:dims(s).l,override:ovr};c.slide=slide||[+$("sl").min,+$("sl").max];return c}
+function setRange(keep){if(!ready())return;const c=cfgNow(),r=Engine.slideRange(ctx([0,0])),lo=r[0],hi=r[1],v=keep?+$("sl").value:Math.round((lo+hi)/2);
+ $("sl").min=lo;$("sl").max=hi;$("sl").value=Math.min(hi,Math.max(lo,v));$("lift").disabled=!c.selfSteer;if(!c.selfSteer)$("lift").checked=false}
+function build(){syncOvr();while(grp.children.length)grp.remove(grp.children[0]);if(!ready()){meshes=[];draw();return}const s=EQ[cur],D=dims(s);
+ Engine.centerY(res.placed,s.open?s.zones.map(z=>({z:z.z,w:z.w})):[{z:0,w:s.w}]);
+ inner=new THREE.Group();inner.position.set(-D.l/2e3,-D.h/2e3,-D.w/2e3);grp.add(inner);meshes=[];
+ inner.add(mesh(0,0,0,D.l,D.w,D.h,new THREE.MeshBasicMaterial({visible:false}),0x888888));
+ if(s.open)for(const z of s.zones)inner.add(mesh(z.x,0,z.z-120,z.l,z.w,120,new THREE.MeshBasicMaterial({color:0x8a8a82}),0x000000));
+ for(const p of res.placed){const m=mesh(p.x,p.y,p.z,p.pl,p.pw,p.h,new THREE.MeshBasicMaterial({color:COL[p.stop]}),0x000000);m.userData.id=p.id;const lb=label(p);if(lb)m.add(lb);inner.add(m);meshes.push(m);
+  if(p.locked)inner.add(mesh(p.x+p.pl/2-120,p.y+p.pw/2-120,p.z+p.h,240,240,240,new THREE.MeshBasicMaterial({color:0x111111}),0x111111))}
+ const mk=(c)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(.05,.03,D.w/1e3+.3),new THREE.MeshBasicMaterial({color:c}));m.position.set(0,-.02,D.w/2e3);inner.add(m);return m};
+ grp.userData={k:mk(0x2c6fd6),a:[0,1,2,3].map(()=>mk(0xd63a2c))};grp.userData.k.position.x=s.rig.kingpinX/1e3;
+ dist=Math.max(14,D.l/1e3*1.5);draw()}
+function ax(){if(!ready()){$("ax").innerHTML="<span class=\"mut\">Choisis un équipement et un type d’essieux pour commencer, puis ajoute tes caisses.</span>";$("tot").textContent="";$("wr").innerHTML="";$("sec").innerHTML="";$("ctot").textContent=cv("· "+items.length+" caisses, "+items.reduce((a,b)=>a+b.kg,0)+" kg");lastRows=[];lastWarn=[];lastTot="";return}const s=EQ[cur],c=cfgNow(),front=+$("sl").value,lift=liftNow(),e=Engine.evaluate(res.placed,ctx(),front),m=v=>(v/1000).toFixed(2).replace(".",",");
+ grp.userData.a.forEach((k,i)=>{k.visible=i<c.offsets.length;k.position.x=(front+(c.offsets[i]||0))/1e3;k.material.color.set(c.selfSteer&&i===0?(lift?0x999999:0xe0a020):0xd63a2c)});
+ $("slv").textContent=front+" mm";
+ items.forEach((it,i)=>{const e=$("st"+i);if(!e)return;const q=res.placed.find(x=>x.id===it.id);e.textContent=q?(q.over?"hors de la remorque":q.locked?"placée · verrouillée":"placée"):"non placée";e.style.color=q&&q.over?"var(--bad)":""});
+ $("ctot").textContent=cv("· "+items.length+" caisses, "+items.reduce((a,b)=>a+b.kg,0)+" kg");
+ const g=e.gross,rows=e.rows.map(r=>({n:r.name,kg:r.kg,lim:r.limit,ok:r.ok&&r.limit>0,x:r.perAxle?` · ${r.perAxle} kg/essieu`:""}));
+ rows.push({n:`Masse totale (${g.id})`,kg:g.kg,lim:g.limit,ok:g.kg<=g.limit,x:""});
+ $("ax").innerHTML=rows.map(w=>{const p=Math.max(0,Math.min(100,w.kg/Math.max(1,w.lim)*100)),k=w.ok?"ok":"bad";return `<div class="l"><span>${w.n}</span><span style="color:var(--${k})">${cv(`${w.kg} / ${w.lim} kg${w.x}`)}</span></div><div class="bar"><i style="width:${p}%;background:var(--${k})"></i></div>`}).join("");
+ lastTot=`Cargaison ${Math.round(e.cargoKg)} kg · centre de gravité x = ${Math.round(e.cogX)} mm · distance « a » ${m(g.a)} m${g.minA?` (min. ${m(g.minA)} m)`:""}`;$("tot").textContent=cv(lastTot);
+ const w=[];rows.filter(x=>!x.ok).forEach(x=>w.push(`${x.n} hors limite : ${x.kg} kg > ${x.lim} kg.`));
+ e.checks.forEach(x=>w.push(`${x.message} <small>(${x.ref})</small>`));
+ const fl=(s.open?Engine.openFlags(res.placed,openSp(s)):closedFlags(res.placed,s)).filter(x=>!res.placed.some(p=>p.over&&x.startsWith(p.id+" "+p.name+" :")));
+ fl.forEach(f=>w.push(f));
+ res.placed.filter(p=>p.over).forEach(p=>w.push(`${p.id} ${p.name} : hors de la remorque (${p.overReason}).`));
+ res.rejected.forEach(x=>w.push(`${x.item.id} ${x.item.name} (${x.item.kg} kg) non placé : ${x.reason}.`));
+ const ck=res.placed.reduce((a,b)=>a+b.kg,0);if(ck>s.kg)w.push(`Charge utile dépassée : ${ck} kg > ${s.kg} kg (dépassement de ${ck-s.kg} kg).`);
+ const wll=wllNow();
+ let sec=[];if(s.open&&res.placed.length)sec=Engine.securement(res.placed,{wllKg:wll,front:s.hb?{heightMm:s.hbH||0}:null,zones:s.zones.map(z=>({x:z.x,z:z.z}))});
+lastPerm=permitCalc(s,res.placed,rows,res.placed.some(p=>p.over),$("season").value==="degel");
+ $("perm").innerHTML=`<div style="font-size:13px"><b class="${lastPerm.need?"bad":"ok"}" style="color:var(--${lastPerm.need?"bad":"ok"})">${lastPerm.need?"Permis spécial requis":"Aucun permis requis"}</b></div><ul style="font-size:13px;margin:6px 0 0;padding-left:18px">${lastPerm.lines.map(x=>"<li>"+esc(cv(x))+"</li>").join("")}</ul><div class="mut" style="font-size:12px;margin-top:6px">Source : Règlement sur le permis spécial de circulation (C-24.2, r. 35), à jour au 1er juillet 2026. Estimation selon les dimensions placées ; le permis du Ministère fait foi.</div>`;
+ lastSec=sec.map(q=>({id:q.id,name:q.name,n:q.n,notes:q.notes,warn:q.warn,type:q.type,blocked:q.blocked}));
+ sec.filter(q=>q.warn).forEach(q=>w.push(q.id+" "+q.name+" : "+q.notes.join(" ; ")+"."));
+ const rem="<ul class=\"mut\" style=\"font-size:12px;margin:8px 0 0\">"+REMINDERS.map(x=>"<li>"+esc(cv(x))+"</li>").join("")+"</ul>";
+ $("sec").innerHTML=s.open?(sec.length?`<div style="font-size:13px;margin-bottom:6px">Attache : <b>${esc(tdName())}</b> · capacité ${esc(cv(wll+" kg"))} · total <b>${sec.reduce((a,q)=>a+q.n,0)}</b> attaches</div><div style="overflow-x:auto"><table class="tbl"><tr><th>Pièce</th><th>Type</th><th>Selon la longueur</th><th>Selon 50 % du poids</th><th>Attaches</th><th>Remarques</th></tr>`+sec.map(q=>`<tr><td>${esc(q.id)} ${esc(q.name)}</td><td>${q.type==="machine"?"Machine":"Colis"}</td><td>${q.byLen}</td><td>${q.byWll}</td><td><b>${q.n}</b></td><td style="white-space:normal;${q.warn?"color:var(--bad)":""}">${esc(cv(q.notes.join(" ; ")))}</td></tr>`).join("")+"</table></div>"+rem:"Aucune pièce placée."):("<small>"+((s.kind||BASE_KIND[cur])==="conteneur"?"Conteneur sur châssis : verrous aux 4 coins inférieurs, avant et arrière arrimés indépendamment (guide §3.6). Calcul non inclus.":"Boîte fermée : calage et sangles de paroi, calcul non inclus.")+"</small>"+rem);
+ lastRows=rows;lastWarn=w.map(strip);
+ $("wr").innerHTML=(w.length?w.map(t=>`<li style="color:var(--bad)">${cv(t)}</li>`):["<li>Aucune alerte : tout est placé et dans les limites du guide.</li>"]).join("");draw()}
+function balance(){if(!ready())return;const s=EQ[cur],locked=res.placed.filter(p=>p.locked),free=res.placed.filter(p=>!p.locked).concat(res.rejected.map(r=>r.item)),
+ r=s.open?Engine.balanceOpen(openSp(s),free,locked,ctx()):Engine.balanceClosed(closedSp(s),free,locked,ctx());
+ res={placed:r.placed,rejected:r.rejected,flags:r.flags||[]};$("sl").value=r.front;build();ax()}
+function run(){if(!ready()){msg("Choisis d’abord un équipement et un type d’essieux.");return}items=sample();renderCrates();relayout(true)}
+function setEq(){cur=$("eq").value;if(ovr&&!ovrAllowed())setOvr(false,false);syncOvr();lastReady=ready();renderCrates();if(!lastReady){res={placed:[],rejected:[],flags:[]};build();ax();return}setRange(false);relayout(true)}
+function reflow(){if(!ready()||!lastReady){setEq();return}setRange(true);if($("auto").checked)balance();else ax()}
+const EXS={
+ a:{eq:"fb",cfg:"tandem",proj:"PRJ-4821 Plateau",items:[["4821-01","Bâti",4500,1800,1900,6500,0,0,1],["4821-02","Moteur",1800,1200,1300,2200,0,1,1],["4821-03","Caisse",2200,1100,1100,1800,0,1,2],["4821-04","Caisse",2200,1100,1100,1800,0,1,2],["4821-05","Palette",1200,1000,1000,600,1,1,3],["4821-06","Boîte",800,600,700,180,1,1,3]]},
+ b:{eq:"rgn",cfg:"tridem",proj:"PRJ-5100 Presse",items:[["M-100","Presse",5000,2900,2400,9000,0,0,1],["M-101","Moteur",1800,1200,1300,2200,0,1,2]]},
+ d:{eq:"sd53",cfg:"tridem",proj:"PRJ-7300 Step deck 53",items:[["7300-01","Bâti",4500,1800,1900,6500,0,0,2],["7300-02","Moteur",1800,1200,1300,2200,0,1,2],["7300-03","Caisse",2200,1100,1100,1800,0,1,1],["7300-04","Caisse",2200,1100,1100,1800,0,1,1],["7300-05","Machine",3000,1400,1500,4200,0,0,1],["7300-06","Palette",1200,1000,1000,600,1,1,3],["7300-07","Palette",1200,1000,1000,600,1,1,3],["7300-08","Boîte",800,600,700,180,1,1,3]]},
+ e:{eq:"fb53",cfg:"tandem",proj:"PRJ-7410 Plateau 53",items:[["7410-01","Machine",3000,1400,1500,4200,0,0,1],["7410-02","Machine",3000,1400,1500,4200,0,0,2],["7410-03","Caisse",2200,1100,1100,1800,0,1,2],["7410-04","Caisse",2200,1100,1100,1800,0,1,3],["7410-05","Caisse",2200,1100,1100,1800,0,1,3],["7410-06","Moteur",1800,1200,1300,2200,0,1,3],["7410-07","Palette",1200,1000,1000,600,1,1,3],["7410-08","Palette",1200,1000,1000,600,1,1,3],["7410-09","Boîte",800,600,700,180,1,1,3],["7410-10","Boîte",800,600,700,180,1,1,3]]},
+ c:{eq:"v53",cfg:"tandem",proj:"PRJ-6002 Palettes",items:Array.from({length:14},(_,i)=>["PAL-"+String(i+1).padStart(2,"0"),"Palette",1200,1000,1100,800,1,1,1+Math.floor(i/5)])}};
+function loadEx(k){const e=EXS[k];if(!e)return;$("eq").value=e.eq;$("cfg").value=e.cfg;$("proj").value=e.proj;$("lift").checked=false;
+ items=e.items.map(a=>({id:a[0],name:a[1],type:typeOf(a[1]),blocked:false,l:a[2],w:a[3],h:a[4],kg:a[5],stackable:!!a[6],rotate:!!a[7],stop:a[8]}));
+ cur=e.eq;lastReady=true;dirty=false;setRange(false);renderCrates();msg("");relayout(true)}
+const LOADER_TPL="<!DOCTYPE html>\n<html lang=\"fr\"><head><meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\">\n<title>Plan de chargement<\/title>\n<style>\n:root{--bg:#f6f5f1;--fg:#1d1d1b;--mut:#6b6a64;--card:#fff;--bd:#dcdad2;--ok:#2e7d4f;--bad:#c0392b;--acc:#2c6fd6;--sel:#fff3bf;color-scheme:light}\n@media (prefers-color-scheme:dark){:root:not([data-theme=\"light\"]){--bg:#1b1b19;--fg:#ecebe5;--mut:#9d9c94;--card:#262624;--bd:#3a3a36;--ok:#5cc189;--bad:#ef7a6c;--acc:#6aa3f5;--sel:#4a4320;color-scheme:dark}}\n:root[data-theme=\"dark\"]{--bg:#1b1b19;--fg:#ecebe5;--mut:#9d9c94;--card:#262624;--bd:#3a3a36;--ok:#5cc189;--bad:#ef7a6c;--acc:#6aa3f5;--sel:#4a4320;color-scheme:dark}\n*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,\"Segoe UI\",sans-serif;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}\nmain{max-width:1200px;margin:0 auto;padding:16px}\nh1{font-size:20px;margin:0}.sub{color:var(--mut);font-size:14px;margin:2px 0 12px}\nbutton{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:6px 11px;cursor:pointer}\nbutton.on{background:var(--acc);border-color:var(--acc);color:#fff}\n.bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center}\n.lay{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px}@media(max-width:900px){.lay{grid-template-columns:1fr}}\n#view{background:var(--card);border:1px solid var(--bd);border-radius:12px;height:min(58vh,520px);min-height:300px;cursor:grab;overflow:hidden;touch-action:none;position:relative}\n#view canvas{display:block;width:100%;height:100%}\n.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px 12px}\n.card h2{font-size:13px;color:var(--mut);margin:0 0 6px;font-weight:600}\n.tw{max-height:min(58vh,520px);overflow:auto}\ntable{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:5px 6px;text-align:left;border-bottom:1px solid var(--bd);vertical-align:top}\nth{color:var(--mut);font-weight:600;position:sticky;top:0;background:var(--card)}\ntr.sel td{background:var(--sel)}tr.done td{opacity:.45}tr{cursor:pointer}\n.sw{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}\n.mut{color:var(--mut)}.bad{color:var(--bad)}ul{margin:4px 0 0;padding-left:18px}\n.hint{font-size:12.5px;color:var(--mut);margin:6px 0 0}\n@media print{.bar,.hint,#view{display:none}.tw{max-height:none}body{background:#fff}}\n<\/style><\/head><body><main>\n<h1 id=\"ttl\"><\/h1><div class=\"sub\" id=\"sub\"><\/div>\n<div class=\"bar\"><button data-v=\"3d\" class=\"on\">3D<\/button><button data-v=\"top\">Dessus<\/button><button data-v=\"side\">Côté<\/button><button data-v=\"rear\">Arrière<\/button><button id=\"prt\">Imprimer<\/button><button id=\"unt\"><\/button><button id=\"thm\"><\/button><span class=\"mut\" id=\"prog\"><\/span><\/div>\n<div class=\"lay\">\n<div><div id=\"view\"><\/div><p class=\"hint\">Glisser = tourner · molette ou 2 doigts = zoom · toucher une caisse = la repérer dans la liste · portes à droite. Couleur = arrêt (<span class=\"sw\" style=\"background:#e07a3f\"><\/span>1 <span class=\"sw\" style=\"background:#3f8fe0\"><\/span>2 <span class=\"sw\" style=\"background:#4fb06d\"><\/span>3).<\/p><\/div>\n<div class=\"card\"><h2>Caisses, dans l’ordre de chargement suggéré (cocher = chargée)<\/h2><div class=\"tw\"><table id=\"tb\"><\/table><\/div><\/div>\n<\/div>\n<div class=\"card\" style=\"margin-top:14px\" id=\"seccard\"><h2>Arrimage<\/h2><div id=\"sec\"><\/div><\/div>\n<div class=\"card\" style=\"margin-top:14px\" id=\"permcard\"><h2>Permis spécial de circulation<\/h2><div id=\"perm\"><\/div><\/div>\n<div class=\"card\" style=\"margin-top:14px\"><h2>Charges et alertes<\/h2><div id=\"rows\"><\/div><ul id=\"warn\"><\/ul><\/div>\n<p class=\"hint\">Plan préparé par le planificateur. Règles : Guide des normes de charges et dimensions, édition 2026 (MTMD Québec), indicatif : le règlement fait foi. Vérifier l’arrimage selon la norme en vigueur.<\/p>\n<\/main>\n<script src=\"https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js\"><\/script>\n<script>\nconst P=/*PLAN*/null;\nconst IMP_K=2.20462;\nfunction fmtLen(mm){const t=Math.round(mm/25.4),f=Math.floor(t/12),i=t-f*12;return f>0?f+\"' \"+i+'\"':i+'\"'}\nfunction convText(s){return String(s).replace(/(\\d+(?:[  ]\\d{3})*(?:,\\d+)?)\\s?(mm|kg|m)(?![\\w'])/g,(a,n,u)=>{const v=parseFloat(n.replace(/[  ]/g,\"\").replace(\",\",\".\"));if(isNaN(v))return a;return u===\"kg\"?Math.round(v*IMP_K)+\" lb\":fmtLen(u===\"m\"?v*1000:v)})}\nconst REMINDERS=[\"Vérifier l’arrimage avant le départ et dans les 80 km suivant le chargement, puis après tout changement de quart, 3 heures de route ou 240 km.\",\"Garder les attaches tendues sur la voie publique.\",\"Le système d’arrimage doit retenir 50 % du poids vers les côtés, 80 % vers l’avant et 20 % vers le haut si la cargaison n’est pas entièrement contenue.\",\"Source : Guide d’arrimage du ministère (édition 2017, pp. 13, 15, 19) ; à valider avec l’édition en vigueur.\"];\n\nlet IM=P.units===\"imperial\",ready=false;const cv=s=>IM?convText(s):s,fl=v=>IM?fmtLen(v):String(v);\nconst $=i=>document.getElementById(i),m=v=>(v/1000).toFixed(2).replace(\".\",\",\");\nconst esc=s=>String(s).replace(/&/g,\"&amp;\").replace(/<\/g,\"&lt;\").replace(/\"/g,\"&quot;\");\nconst COL=[0,0xe07a3f,0x3f8fe0,0x4fb06d],hex=c=>\"#\"+c.toString(16).padStart(6,\"0\");\nconst ord=[...P.pieces].sort((a,b)=>b.stop-a.stop||a.x-b.x||a.z-b.z);\nconst done={};\nfunction paintTxt(){\n$(\"ttl\").textContent=P.title||\"Plan de chargement\";\ndocument.title=(P.title?P.title+\" · \":\"\")+\"Plan de chargement\";\n$(\"sub\").textContent=cv(P.eq.n+\" · \"+P.cfg+\" · \"+P.date+\" · \"+P.pieces.length+\" caisses, \"+P.pieces.reduce((a,b)=>a+b.kg,0)+\" kg\");\n$(\"unt\").textContent=\"Unités : \"+(IM?\"impérial\":\"métrique\");\n$(\"tb\").innerHTML=\"<tr><th><\/th><th>#<\/th><th>N°<\/th><th>Désignation<\/th><th>Arrêt<\/th><th>L × l × H (\"+(IM?\"pi-po\":\"mm\")+\")<\/th><th>\"+(IM?\"lb\":\"kg\")+\"<\/th><th>Position<\/th><th>Att.<\/th><\/tr>\"+ord.map((p,i)=>{\n const z=P.eq.zones[p.zi]||P.eq.zones[0],lvl=p.z-z.z>5?\" · empilée\":\"\";\n return `<tr data-id=\"${esc(p.id)}\"><td><input type=\"checkbox\" aria-label=\"Chargée\"><\/td><td>${i+1}<\/td><td><b>${esc(p.id)}<\/b><\/td><td>${esc(p.name)}<\/td><td><span class=\"sw\" style=\"background:${hex(COL[p.stop])}\"><\/span>${p.stop}<\/td><td>${fl(p.pl)} × ${fl(p.pw)} × ${fl(p.h)}<\/td><td>${IM?Math.round(p.kg*IMP_K):p.kg}<\/td><td>${P.eq.open?esc(z.name)+\" · \":\"\"}${cv(m(p.x)+\" m\")} du nez${lvl}${p.locked?\" · fixée\":\"\"}<\/td><td><b>${(()=>{const q=(P.sec||[]).find(x=>x.id===p.id);return q?q.n+(q.type===\"machine\"?\" M\":\"\"):\"\"})()}<\/b><\/td><\/tr>`}).join(\"\")+\n (P.rejected.length?`<tr><td colspan=\"9\" class=\"bad\">${esc(cv(\"Non placées : \"+P.rejected.map(r=>r.id+\" \"+r.name+\" (\"+r.kg+\" kg)\").join(\", \")))}<\/td><\/tr>`:\"\");\ndocument.querySelectorAll(\"#tb tr[data-id]\").forEach(r=>{const c=r.querySelector(\"input\");if(c)c.checked=!!done[r.dataset.id]});\n$(\"rows\").innerHTML=P.rows.map(r=>`<div style=\"display:flex;justify-content:space-between;gap:8px;font-size:13px\"><span>${esc(r.n)}<\/span><span class=\"${r.ok?\"\":\"bad\"}\">${esc(cv(r.kg+\" / \"+r.lim+\" kg\"+(r.x||\"\")))}<\/span><\/div>`).join(\"\")+`<div class=\"mut\" style=\"font-size:13px;margin-top:4px\">${esc(cv(P.tot))}<\/div>`;\n$(\"warn\").innerHTML=P.warn.length?P.warn.map(w=>`<li class=\"bad\">${esc(cv(w))}<\/li>`).join(\"\"):\"<li>Aucune alerte.<\/li>\";\n$(\"seccard\").style.display=P.sec&&P.sec.length?\"\":\"none\";\nif(P.sec&&P.sec.length)$(\"sec\").innerHTML=`<div style=\"font-size:13px;margin-bottom:6px\">${esc(cv(\"Attache : \"+P.td.n+\" · capacité \"+P.td.wll+\" kg\"))} · total <b>${P.sec.reduce((a,q)=>a+q.n,0)}<\/b> attaches (M = machine : 4 min. de 2 268 kg)<\/div>`+P.sec.map(q=>`<div style=\"font-size:13px;margin:2px 0\" class=\"${q.warn?\"bad\":\"\"}\"><b>${esc(q.id)}<\/b> ${esc(q.name)} : ${q.n} attache(s)${q.blocked?\" (calée vers l’avant)\":\"\"}${q.notes.length?\" — \"+esc(cv(q.notes.join(\" ; \"))):\"\"}<\/div>`).join(\"\")+\"<ul class=\\\"mut\\\" style=\\\"font-size:12px\\\">\"+REMINDERS.map(r=>\"<li>\"+esc(cv(r))+\"<\/li>\").join(\"\")+\"<\/ul>\";\n$(\"permcard\").style.display=P.permit?\"\":\"none\";\nif(P.permit)$(\"perm\").innerHTML=`<div style=\"font-size:13px\"><b class=\"${P.permit.need?\"bad\":\"\"}\">${P.permit.need?\"Permis spécial requis\":\"Aucun permis requis\"}<\/b><\/div><ul style=\"font-size:13px;margin:6px 0 0;padding-left:18px\">${P.permit.lines.map(x=>\"<li>\"+esc(cv(x))+\"<\/li>\").join(\"\")}<\/ul>`;\nif(ready)paint()}\npaintTxt();\nconst upd=()=>{const n=Object.values(done).filter(Boolean).length;$(\"prog\").textContent=n+\" / \"+P.pieces.length+\" chargées\"};upd();\n// scène\nconst view=$(\"view\"),ren=new THREE.WebGLRenderer({antialias:true,alpha:true}),sc=new THREE.Scene(),cam=new THREE.PerspectiveCamera(40,1,.1,200),grp=new THREE.Group(),ray=new THREE.Raycaster();\nview.appendChild(ren.domElement);sc.add(grp);\nconst D=P.eq.dims,inner=new THREE.Group();inner.position.set(-D.l/2e3,-D.h/2e3,-D.w/2e3);grp.add(inner);\nlet ry=-.6,rx=.35,dist=Math.max(14,D.l/1e3*1.5);\nfunction size(){const w=view.clientWidth,h=view.clientHeight;ren.setSize(w,h,false);ren.setPixelRatio(Math.min(2,devicePixelRatio||1));cam.aspect=w/h;cam.updateProjectionMatrix();draw()}\nfunction draw(){grp.rotation.set(rx,ry,0);cam.position.set(0,0,dist);ren.render(sc,cam)}\nfunction mesh(x,y,z,l,w,h,mat,edge){const g=new THREE.BoxGeometry(l/1e3,h/1e3,w/1e3),k=new THREE.Mesh(g,mat);k.position.set((x+l/2)/1e3,(z+h/2)/1e3,(y+w/2)/1e3);\n k.add(new THREE.LineSegments(new THREE.EdgesGeometry(g),new THREE.LineBasicMaterial({color:edge,transparent:true,opacity:.5})));return k}\nfunction label(p){try{const c=document.createElement(\"canvas\");c.width=256;c.height=128;const g=c.getContext(\"2d\");let fs=76;g.font=\"bold \"+fs+\"px system-ui,sans-serif\";const tw=g.measureText(p.id).width;if(tw>220){fs=Math.floor(fs*220/tw);g.font=\"bold \"+fs+\"px system-ui,sans-serif\"}\n g.fillStyle=\"rgba(255,255,255,.93)\";g.strokeStyle=\"#111\";g.lineWidth=5;g.beginPath();g.roundRect?g.roundRect(8,14,240,100,18):g.rect(8,14,240,100);g.fill();g.stroke();g.fillStyle=\"#111\";g.textAlign=\"center\";g.textBaseline=\"middle\";g.fillText(p.id,128,66);\n const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),depthTest:false,transparent:true}));const w=Math.max(.7,Math.min(1.5,Math.min(p.pl,p.pw)/1e3*.9));sp.scale.set(w,w/2,1);sp.position.set(0,p.h/2e3,0);sp.renderOrder=10;return sp}catch(e){return null}}\ninner.add(mesh(0,0,0,D.l,D.w,D.h,new THREE.MeshBasicMaterial({visible:false}),0x888888));\nif(P.eq.open)for(const z of P.eq.zones)inner.add(mesh(z.x,0,z.z-120,z.l,z.w,120,new THREE.MeshBasicMaterial({color:0x8a8a82}),0x000000));\nconst meshes={};\nfor(const p of P.pieces){const k=mesh(p.x,p.y,p.z,p.pl,p.pw,p.h,new THREE.MeshBasicMaterial({color:COL[p.stop],transparent:true}),0x000000);k.userData.id=p.id;const lb=label(p);if(lb)k.add(lb);inner.add(k);meshes[p.id]=k}\nconst bar=(x,c)=>{const k=new THREE.Mesh(new THREE.BoxGeometry(.05,.03,D.w/1e3+.3),new THREE.MeshBasicMaterial({color:c}));k.position.set(x/1e3,-.02,D.w/2e3);inner.add(k)};\nbar(P.eq.kingpinX,0x2c6fd6);P.offsets.forEach((x,i)=>bar(x,P.selfSteer&&i===0?(P.lifted?0x999999:0xe0a020):0xd63a2c));\n// sélection / chargée\nlet sel=null;\nfunction paint(){for(const p of P.pieces){const k=meshes[p.id];k.material.color.set(sel===p.id?0xffd43b:COL[p.stop]);k.material.opacity=done[p.id]?.25:1}\n document.querySelectorAll(\"#tb tr[data-id]\").forEach(r=>{r.classList.toggle(\"sel\",r.dataset.id===sel);r.classList.toggle(\"done\",!!done[r.dataset.id])});draw()}\nfunction select(id,scroll){sel=sel===id?null:id;paint();if(sel&&scroll){const r=[...document.querySelectorAll(\"#tb tr[data-id]\")].find(x=>x.dataset.id===id);r&&r.scrollIntoView({block:\"nearest\",behavior:\"smooth\"})}}\n$(\"tb\").onclick=e=>{const r=e.target.closest(\"tr[data-id]\");if(!r)return;if(e.target.type===\"checkbox\"){done[r.dataset.id]=e.target.checked;upd();paint();return}select(r.dataset.id,false)};\n// interactions\nconst ptr=new Map();let moved=false,pinch=0;\nview.onpointerdown=e=>{view.setPointerCapture(e.pointerId);ptr.set(e.pointerId,[e.clientX,e.clientY]);moved=false;if(ptr.size===2){const a=[...ptr.values()];pinch=Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1])}};\nview.onpointermove=e=>{if(!ptr.has(e.pointerId))return;const o=ptr.get(e.pointerId);\n if(ptr.size===2){ptr.set(e.pointerId,[e.clientX,e.clientY]);const a=[...ptr.values()],d=Math.hypot(a[0][0]-a[1][0],a[0][1]-a[1][1]);if(pinch)dist=Math.min(80,Math.max(4,dist*pinch/d));pinch=d;moved=true;draw();return}\n const dx=e.clientX-o[0],dy=e.clientY-o[1];if(Math.abs(dx)+Math.abs(dy)>2)moved=true;ry+=dx*.008;rx=Math.max(-1.6,Math.min(1.6,rx+dy*.008));ptr.set(e.pointerId,[e.clientX,e.clientY]);draw();setBtn(null)};\nview.onpointerup=e=>{const was=ptr.size===1&&!moved;ptr.delete(e.pointerId);pinch=0;\n if(was){const r=ren.domElement.getBoundingClientRect();grp.updateMatrixWorld(true);cam.updateMatrixWorld(true);\n  ray.setFromCamera(new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),cam);\n  const h=ray.intersectObjects(Object.values(meshes),false);if(h.length)select(h[0].object.userData.id,true);else if(sel){sel=null;paint()}}};\nview.onpointercancel=e=>{ptr.delete(e.pointerId)};\nview.addEventListener(\"wheel\",e=>{e.preventDefault();dist=Math.min(80,Math.max(4,dist*(1+e.deltaY*.001)));draw()},{passive:false});\nconst V={\"3d\":[.35,-.6],top:[Math.PI/2,0],side:[0,0],rear:[0,-Math.PI/2]};\nfunction setBtn(k){document.querySelectorAll(\"[data-v]\").forEach(b=>b.classList.toggle(\"on\",b.dataset.v===k))}\ndocument.querySelectorAll(\"[data-v]\").forEach(b=>b.onclick=()=>{[rx,ry]=V[b.dataset.v];dist=Math.max(14,D.l/1e3*1.5);setBtn(b.dataset.v);draw()});\n$(\"prt\").onclick=()=>window.print();\n$(\"unt\").onclick=()=>{IM=!IM;paintTxt()};\nfunction initTheme(){const b=$(\"thm\"),de=document.documentElement;if(!b||!de||!de.setAttribute)return;let m=\"auto\";try{m=localStorage.getItem(\"thm\")||\"auto\"}catch(e){}const L={auto:\"auto\",light:\"clair\",dark:\"sombre\"},ap=()=>{if(m===\"auto\")de.removeAttribute(\"data-theme\");else de.setAttribute(\"data-theme\",m);b.textContent=\"Thème : \"+L[m];b.setAttribute(\"aria-label\",\"Changer le thème (auto, clair, sombre)\")};ap();b.onclick=()=>{m=m===\"auto\"?\"light\":m===\"light\"?\"dark\":\"auto\";try{localStorage.setItem(\"thm\",m)}catch(e){}ap()}}\ninitTheme();\n\nif(window.ResizeObserver)new ResizeObserver(size).observe(view);size();ready=true;paint();\n<\/script><\/body><\/html>\n";
+// ---- export : plan, PDF 3 vues, vue chargeur
+let lastRows=[],lastWarn=[];
+const strip=s=>String(s).replace(/<[^>]+>/g,"");
+function plan(){const s=EQ[cur],c=cfgNow(),front=+$("sl").value,d=dims(s);
+ return{title:($("proj").value||"").trim(),date:new Date().toLocaleDateString("fr-CA"),
+  eq:{n:s.n,open:!!s.open,dims:d,zones:s.open?s.zones.map(z=>({name:z.name,x:z.x,z:z.z,l:z.l,w:z.w})):[{name:"Caisse",x:0,z:0,l:s.l,w:s.w}],legalH:s.open?s.legalH:s.h,legalW:s.open?s.legalW:s.w,kingpinX:s.rig.kingpinX},
+  cfg:c.name,offsets:c.offsets.map(o=>front+o),selfSteer:!!c.selfSteer,lifted:liftNow(),
+  season:$("season").value==="degel"?"période de dégel":"période normale",
+  pieces:res.placed.map(p=>({id:p.id,name:p.name,x:p.x,y:p.y,z:p.z,pl:p.pl,pw:p.pw,h:p.h,kg:p.kg,stop:p.stop,zi:p.zi||0,locked:!!p.locked})),
+  rejected:res.rejected.map(r=>({id:r.item.id,name:r.item.name,kg:r.item.kg})),
+  rows:lastRows,warn:lastWarn,sec:lastSec,permit:lastPerm,td:{n:tdName(),wll:wllNow()},tot:lastTot,units:imp?"imperial":"metric"}}
+async function saveFile(name,blob){
+ let dl=null;try{dl=window.claude&&await window.claude.use("downloads")}catch(e){}
+ if(dl){try{await dl.save({filename:name,data:blob});return}catch(e){if(e&&e.code==="declined")return;if(e&&e.code!=="unavailable"&&e.code!=="not_granted"){msg("Enregistrement impossible : "+(e.message||e.code));return}}}
+ const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body&&document.body.appendChild(a);a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
+const fname=(P,ext)=>((P.title||"plan-de-chargement").replace(/[^\w\-.]+/g,"_")+"."+ext);
+function loaderHTML(P){return LOADER_TPL.replace("/*PLAN*/null",()=>JSON.stringify(P).replace(/</g,"\\u003c"))}
+async function exportLoader(){const P=plan();if(!P.pieces.length){msg("Aucune caisse placée à exporter.");return}msg("");await saveFile(fname(P,"html"),new Blob([loaderHTML(P)],{type:"text/html"}))}
+function buildPDF(P){
+ const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:"landscape",unit:"mm",format:"letter"}),PW=279.4,PH=215.9,M=10,CW=PW-2*M;
+ const IM=P.units==="imperial",cv=s=>IM?convText(s):s,fl=v=>IM?fmtLen(v):String(v);
+ const rgb=[[0,0,0],[224,122,63],[63,143,224],[79,176,109]],mm=v=>(v/1000).toFixed(2).replace(".",",");
+ const D=P.eq.dims,pcs=P.pieces;
+ let ymin=0,ymax=D.w,zmax=P.eq.legalH;
+ for(const p of pcs){ymin=Math.min(ymin,p.y);ymax=Math.max(ymax,p.y+p.pw);zmax=Math.max(zmax,p.z+p.h)}
+ if(P.eq.open)ymax=Math.max(ymax,P.eq.legalW);
+ const W=ymax-ymin,Hh=zmax,Lx=Math.max(D.l,...pcs.map(p=>p.x+p.pl));
+ const sc=Math.min(CW/(Lx+200),138/(W+2*Hh));
+ let pg=1;
+ const head=()=>{doc.setFont("helvetica","bold");doc.setFontSize(15);doc.setTextColor(0);doc.text(P.title||"Plan de chargement",M,M+5);
+  doc.setFont("helvetica","normal");doc.setFontSize(9.5);doc.setTextColor(80);
+  doc.text(cv(P.eq.n+"  |  "+P.cfg+"  |  "+P.season+"  |  "+P.date+"  |  "+pcs.length+" caisses, "+pcs.reduce((a,b)=>a+b.kg,0)+" kg"),M,M+11);doc.setTextColor(0)};
+ const foot=()=>{doc.setFontSize(7);doc.setTextColor(110);doc.text("Règles : Guide des normes de charges et dimensions, édition 2026 (MTMD Québec), indicatif : le règlement fait foi. Arrimage à vérifier selon la norme en vigueur.",M,PH-5);doc.text("Page "+pg,PW-M,PH-5,{align:"right"});doc.setTextColor(0)};
+ const lab=(t,x,y)=>{doc.setFont("helvetica","bold");doc.setFontSize(9);doc.setTextColor(60);doc.text(t,x,y);doc.setFont("helvetica","normal");doc.setTextColor(0)};
+ const box=(x,y,w,h,p,alpha)=>{doc.setGState(new doc.GState({opacity:alpha}));doc.setFillColor(...rgb[p.stop]);doc.rect(x,y,w,h,"F");doc.setGState(new doc.GState({opacity:1}));
+  doc.setDrawColor(0);doc.setLineWidth(.25);doc.rect(x,y,w,h,"S");
+  let fs=Math.min(14,Math.max(4.5,h*2.2));doc.setFont("helvetica","bold");doc.setFontSize(fs);const tw=doc.getTextWidth(p.id);if(tw>w*.92){fs=Math.max(4,fs*w*.92/tw);doc.setFontSize(fs)}
+  doc.setTextColor(0);doc.text(p.id,x+w/2,y+h/2,{align:"center",baseline:"middle"});doc.setFont("helvetica","normal")};
+ head();
+ // 1) vue de dessus
+ const X0=M+(CW-(Lx+200)*sc)/2+100*sc;let y0=M+16;
+ lab("VUE DE DESSUS   (avant à gauche, portes à droite)",M,y0);y0+=3;
+ const ty=y0+3,tx=v=>X0+v*sc;
+ doc.setDrawColor(120);doc.setLineWidth(.3);
+ if(P.eq.open){for(const z of P.eq.zones){doc.setFillColor(225,224,218);doc.rect(tx(z.x),ty+(0-ymin)*sc,z.l*sc,z.w*sc,"FD")}}else doc.rect(tx(0),ty+(0-ymin)*sc,D.l*sc,D.w*sc,"S");
+ [...pcs].sort((a,b)=>a.z-b.z).forEach(p=>box(tx(p.x),ty+(p.y-ymin)*sc,p.pl*sc,p.pw*sc,p,1));
+ doc.setDrawColor(44,111,214);doc.setLineWidth(.6);doc.line(tx(P.eq.kingpinX),ty-2,tx(P.eq.kingpinX),ty+W*sc+2);
+ P.offsets.forEach((o,i)=>{doc.setDrawColor(...(P.selfSteer&&i===0?[224,160,32]:[214,58,44]));doc.line(tx(o),ty-2,tx(o),ty+W*sc+2)});
+ doc.setFontSize(7);doc.setTextColor(90);doc.text("Côté passager",M,ty+2);doc.text("Côté conducteur",M,ty+W*sc-1);doc.setTextColor(0);
+ // 2) vue de côté
+ let sy=ty+W*sc+9;lab("VUE DE CÔTÉ   (hauteur depuis le sol)",M,sy);sy+=3;
+ const base=sy+4+Hh*sc,zy=v=>base-v*sc;
+ doc.setDrawColor(0);doc.setLineWidth(.4);doc.line(tx(-100),base,tx(Lx+100),base);
+ if(P.eq.open){doc.setLineWidth(.8);for(const z of P.eq.zones)doc.line(tx(z.x),zy(z.z),tx(z.x+z.l),zy(z.z))}else{doc.setLineWidth(.3);doc.rect(tx(0),zy(D.h),D.l*sc,D.h*sc,"S")}
+ doc.setGState(new doc.GState({opacity:1}));
+ [...pcs].sort((a,b)=>b.y-a.y).forEach(p=>box(tx(p.x),zy(p.z+p.h),p.pl*sc,p.h*sc,p,.78));
+ doc.setDrawColor(200,40,40);doc.setLineWidth(.25);doc.setLineDashPattern([1.5,1.5],0);doc.line(tx(-100),zy(P.eq.legalH),tx(Lx+100),zy(P.eq.legalH));doc.setLineDashPattern([],0);
+ doc.setFontSize(7);doc.setTextColor(200,40,40);doc.text(cv((P.eq.open?"hauteur légale ":"hauteur utile ")+mm(P.eq.legalH)+" m"),tx(Lx+100),zy(P.eq.legalH)-1,{align:"right"});doc.setTextColor(0);
+ doc.setDrawColor(44,111,214);doc.setLineWidth(.6);doc.line(tx(P.eq.kingpinX),base,tx(P.eq.kingpinX),base+2.5);
+ P.offsets.forEach((o,i)=>{doc.setDrawColor(...(P.selfSteer&&i===0?[224,160,32]:[214,58,44]));doc.line(tx(o),base,tx(o),base+2.5)});
+ // 3) vue arrière + résumé
+ let ry0=base+9;lab("VUE ARRIÈRE   (vue depuis les portes)",M,ry0);ry0+=3;
+ const rb=ry0+4+Hh*sc,rx0=M+4,rxv=v=>rx0+(ymax-v)*sc,rz=v=>rb-v*sc;
+ doc.setDrawColor(0);doc.setLineWidth(.4);doc.line(rx0-2,rb,rx0+W*sc+2,rb);
+ if(P.eq.open){doc.setLineWidth(.8);doc.line(rxv(P.eq.legalW),rz(P.eq.zones[0].z),rxv(0),rz(P.eq.zones[0].z))}else{doc.setLineWidth(.3);doc.rect(rxv(D.w),rz(D.h),D.w*sc,D.h*sc,"S")}
+ [...pcs].sort((a,b)=>b.x-a.x).forEach(p=>box(rxv(p.y+p.pw),rz(p.z+p.h),p.pw*sc,p.h*sc,p,.78));
+ doc.setDrawColor(200,40,40);doc.setLineWidth(.25);doc.setLineDashPattern([1.5,1.5],0);doc.line(rx0-2,rz(P.eq.legalH),rx0+W*sc+2,rz(P.eq.legalH));
+ if(P.eq.open){doc.line(rxv(0),rz(0),rxv(0),rz(P.eq.legalH));doc.line(rxv(P.eq.legalW),rz(0),rxv(P.eq.legalW),rz(P.eq.legalH))}doc.setLineDashPattern([],0);
+ doc.setFontSize(7);doc.setTextColor(90);doc.setFontSize(6.5);doc.text("Conducteur",rx0,rb+4);doc.text("Passager",rx0+W*sc,rb+4,{align:"right"});doc.setFontSize(7);doc.setTextColor(0);
+ // résumé à droite de la vue arrière
+ let sx=rx0+W*sc+14,syy=ry0+2;doc.setFontSize(8.5);
+ doc.setFont("helvetica","bold");doc.text("Charges",sx,syy);doc.setFont("helvetica","normal");syy+=4.5;
+ for(const r of P.rows){doc.setTextColor(...(r.ok?[0,0,0]:[190,30,30]));doc.text(strip(r.n),sx,syy);doc.text(cv(r.kg+" / "+r.lim+" kg"),sx+88,syy,{align:"right"});syy+=4.2}
+ doc.setTextColor(80);doc.setFontSize(7.5);doc.text(doc.splitTextToSize(cv(P.tot),95),sx,syy+1);doc.setTextColor(0);
+ let lx=sx+108,ly=ry0+2;doc.setFontSize(8.5);doc.setFont("helvetica","bold");doc.text("Légende",lx,ly);doc.setFont("helvetica","normal");ly+=4.5;
+ [1,2,3].forEach(k=>{doc.setFillColor(...rgb[k]);doc.setDrawColor(0);doc.rect(lx,ly-3,4,4,"FD");doc.text("Arrêt "+k+(k===1?" (livré en premier)":""),lx+6,ly);ly+=4.5});
+ doc.setDrawColor(44,111,214);doc.setLineWidth(.6);doc.line(lx,ly-1,lx+4,ly-1);doc.text("Pivot d’attelage",lx+6,ly);ly+=4.5;
+ doc.setDrawColor(214,58,44);doc.line(lx,ly-1,lx+4,ly-1);doc.text("Essieux de la semi",lx+6,ly);ly+=4.5;
+ if(P.selfSteer){doc.setDrawColor(224,160,32);doc.line(lx,ly-1,lx+4,ly-1);doc.text("Autovireur"+(P.lifted?" (relevé)":""),lx+6,ly)}
+ foot();
+ // page 2+ : liste de chargement
+ const newPage=()=>{doc.addPage();pg++;head();foot();return M+18};
+ let y=newPage();doc.setFontSize(11);doc.setFont("helvetica","bold");doc.text("Liste de chargement",M,y);y+=5;
+ doc.setFontSize(7.5);const cols=[["#",M,0],["N°",M+9,0],["Désignation",M+34,0],["Arrêt",M+78,0],["L × l × H ("+(IM?"pi-po":"mm")+")",M+92,0],[IM?"lb":"kg",M+146,1],["Position",M+148,0],["Att.",PW-M-17,1],["Chargée",PW-M-4,1]];
+ const hdr=()=>{doc.setFont("helvetica","bold");doc.setTextColor(90);cols.forEach(c=>doc.text(c[0],c[1],y,{align:c[2]?"right":"left"}));doc.setDrawColor(150);doc.setLineWidth(.2);doc.line(M,y+1.5,PW-M,y+1.5);doc.setTextColor(0);doc.setFont("helvetica","normal");y+=5.5};
+ hdr();
+ const ord=[...pcs].sort((a,b)=>b.stop-a.stop||a.x-b.x||a.z-b.z);
+ ord.forEach((p,i)=>{if(y>PH-16){y=newPage();hdr()}
+  const z=P.eq.zones[p.zi]||P.eq.zones[0],pos=(P.eq.open?z.name+", ":"")+cv(mm(p.x)+" m")+" du nez"+(p.z-z.z>5?", empilée":"")+(p.locked?", fixée":"");
+  doc.setFontSize(8);doc.text(String(i+1),M,y);doc.setFont("helvetica","bold");doc.text(p.id,M+9,y);doc.setFont("helvetica","normal");
+  doc.text(doc.splitTextToSize(p.name,40)[0],M+34,y);doc.setFillColor(...rgb[p.stop]);doc.rect(M+78,y-2.6,3,3,"F");doc.text(String(p.stop),M+83,y);
+  doc.text(fl(p.pl)+" × "+fl(p.pw)+" × "+fl(p.h),M+92,y);doc.text(IM?String(Math.round(p.kg*IMP_K)):String(p.kg),M+146,y,{align:"right"});doc.text(doc.splitTextToSize(pos,PW-M-14-8-(M+148))[0],M+148,y);const sq=(P.sec||[]).find(q=>q.id===p.id);if(sq){doc.setFont("helvetica","bold");doc.text(String(sq.n)+(sq.type==="machine"?" M":""),PW-M-17,y,{align:"right"});doc.setFont("helvetica","normal")}
+  doc.setDrawColor(0);doc.setLineWidth(.2);doc.rect(PW-M-7,y-3,3.6,3.6,"S");
+  doc.setDrawColor(225);doc.line(M,y+1.6,PW-M,y+1.6);y+=5.2});
+ y+=3;
+ if(P.sec&&P.sec.length){if(y>PH-50)y=newPage();doc.setFontSize(9);doc.setFont("helvetica","bold");doc.text("Arrimage",M,y);doc.setFont("helvetica","normal");y+=4.5;doc.setFontSize(8);
+  doc.text(cv("Attache : "+P.td.n+" · capacité "+P.td.wll+" kg · total "+P.sec.reduce((a,q)=>a+q.n,0)+" attaches. « M » = machine (4 attaches min. de 2 268 kg)."),M,y,{maxWidth:CW});y+=5;
+  P.sec.forEach(q=>{const ls=doc.splitTextToSize(cv(q.id+" "+q.name+" : "+q.n+" attache(s)"+(q.blocked?" (calée vers l’avant)":"")+(q.notes.length?" — "+q.notes.join(" ; "):"")),CW);if(y+ls.length*3.8>PH-12)y=newPage();doc.setTextColor(...(q.warn?[190,30,30]:[0,0,0]));doc.text(ls,M,y);y+=ls.length*3.8});doc.setTextColor(0);y+=2}
+ if(P.permit){if(y>PH-40)y=newPage();doc.setFontSize(9);doc.setFont("helvetica","bold");doc.setTextColor(...(P.permit.need?[190,30,30]:[0,0,0]));doc.text(P.permit.need?"Permis spécial de circulation requis":"Permis spécial : aucun requis",M,y);doc.setTextColor(0);doc.setFont("helvetica","normal");y+=4.5;doc.setFontSize(7.5);
+  P.permit.lines.forEach(r=>{const ls=doc.splitTextToSize("• "+cv(r),CW);if(y+ls.length*3.6>PH-12)y=newPage();doc.text(ls,M,y);y+=ls.length*3.6});y+=3}
+ if(y>PH-36)y=newPage();doc.setFontSize(8.5);doc.setFont("helvetica","bold");doc.text("Rappels d’arrimage",M,y);doc.setFont("helvetica","normal");y+=4.2;doc.setFontSize(7.5);
+ REMINDERS.forEach(r=>{const ls=doc.splitTextToSize("• "+cv(r),CW);if(y+ls.length*3.6>PH-12)y=newPage();doc.text(ls,M,y);y+=ls.length*3.6});y+=3;
+ doc.setFontSize(7.5);doc.setTextColor(90);doc.text("Ordre suggéré : dernier arrêt d’abord (au nez), puis de l’avant vers l’arrière, puis du bas vers le haut.",M,y);doc.setTextColor(0);y+=7;
+ if(P.rejected.length){if(y>PH-20)y=newPage();doc.setFontSize(9);doc.setFont("helvetica","bold");doc.setTextColor(190,30,30);doc.text(cv("Non placées : "+P.rejected.map(r=>r.id+" "+r.name+" ("+r.kg+" kg)").join(", ")),M,y,{maxWidth:CW});doc.setTextColor(0);doc.setFont("helvetica","normal");y+=8}
+ if(P.warn.length){if(y>PH-30)y=newPage();doc.setFontSize(9);doc.setFont("helvetica","bold");doc.text("Alertes",M,y);doc.setFont("helvetica","normal");y+=4.5;doc.setFontSize(8);
+  doc.setTextColor(190,30,30);P.warn.forEach(w=>{const ls=doc.splitTextToSize(cv("• "+w),CW);if(y+ls.length*4>PH-12){y=newPage()}doc.text(ls,M,y);y+=ls.length*4});doc.setTextColor(0)}
+ return doc}
+async function exportPDF(){const P=plan();if(!P.pieces.length){msg("Aucune caisse placée à exporter.");return}
+ if(!window.jspdf){msg("Bibliothèque PDF non chargée (connexion requise).");return}
+ try{msg("");const doc=buildPDF(P);await saveFile(fname(P,"pdf"),doc.output("blob"))}catch(e){msg("Échec du PDF : "+(e.message||e))}}
+// ---- catalogue, projets et administration (capacité db, partagée entre les utilisateurs)
+let DB=null,USR=null,myId=null,isAdmin=false,canWrite=true,role="planificateur",ROLES=[],PROJ=[],CATDOCS=null,curProj=null,curTab="plan",adminTab="eq",eqForm=null,pendDel=null,loaderP=null;
+const KINDS={conteneur:"Conteneur",fermee:"Remorque fermée",plateau:"Plateau",stepdeck:"Step deck",fardier:"Fardier"};
+const OPEN_KINDS=["plateau","stepdeck","fardier"];
+const BASE_KIND={c20:"conteneur",c40:"conteneur",c40h:"conteneur",v53:"fermee",fb:"plateau",fb53:"plateau",sd:"stepdeck",sd53:"stepdeck",dd:"fardier",rgn:"fardier"};
+const ROLE_LBL={admin:"Administrateur",planificateur:"Planificateur",chargeur:"Chargeur"};
+const STATUS=["brouillon","validé","chargé"];
+const EQ0=JSON.parse(JSON.stringify(EQ));
+const nowIso=()=>new Date().toISOString(),newId=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const fmtDate=s=>{try{return new Date(s).toLocaleString("fr-CA",{dateStyle:"short",timeStyle:"short"})}catch(e){return""}};
+const clean=o=>JSON.parse(JSON.stringify(o));
+const isNum=v=>typeof v==="number"&&isFinite(v);
+function amsg(t,good){const e=$("amsg");if(e){e.textContent=t||"";e.style.color=good?"var(--ok)":"var(--bad)"}}
+
+// ---------- équipements : conversion document <-> équipement du planificateur
+function validDoc(d){if(!d||typeof d.n!=="string"||!isNum(d.kg)||!isNum(d.kingpinX)||!isNum(d.tareKg)||!isNum(d.cogX))return false;
+ if(OPEN_KINDS.includes(d.kind))return Array.isArray(d.zones)&&d.zones.length>0&&d.zones.every(z=>isNum(z.x)&&isNum(z.z)&&isNum(z.l)&&isNum(z.w)&&z.l>0&&z.w>0)&&isNum(d.legalH)&&isNum(d.legalW);
+ return isNum(d.l)&&isNum(d.w)&&isNum(d.h)&&d.l>0&&d.w>0&&d.h>0}
+function docToEq(d){const o=OPEN_KINDS.includes(d.kind),L=o?Math.max(...d.zones.map(z=>z.x+z.l)):d.l;
+ const e={n:d.n,kind:d.kind,kg:d.kg,ovrOk:d.ovr!==false,rig:{kingpinX:d.kingpinX,tandemX:Math.max(0,L-1500),trailerTareKg:d.tareKg,trailerCogX:d.cogX}};
+ if(o){e.open=1;e.hb=!!d.hb;e.hbH=d.hbH||0;e.legalH=d.legalH;e.legalW=d.legalW;e.zones=d.zones.map(z=>({name:String(z.name||""),x:z.x,z:z.z,l:z.l,w:z.w}))}else{e.l=d.l;e.w=d.w;e.h=d.h}return e}
+function eqToDoc(k,e,i){const d={n:e.n,kind:BASE_KIND[k]||(e.open?"plateau":"fermee"),enabled:true,order:i,kg:e.kg,ovr:e.ovrOk!==false,tareKg:e.rig.trailerTareKg,kingpinX:e.rig.kingpinX,cogX:e.rig.trailerCogX};
+ if(e.open){d.zones=e.zones.map(z=>({...z}));d.legalH=e.legalH;d.legalW=e.legalW;d.hb=!!e.hb;d.hbH=e.hbH||0}else{d.l=e.l;d.w=e.w;d.h=e.h}return d}
+function fillEq(){const g={};for(const k in EQ){const kd=EQ[k].kind||BASE_KIND[k]||(EQ[k].open?"plateau":"fermee");(g[kd]=g[kd]||[]).push(k)}
+ $("eq").innerHTML="<option value=\"\">Choisir un équipement…</option>"+Object.keys(KINDS).filter(x=>g[x]).map(x=>`<optgroup label="${KINDS[x]}s">`+g[x].map(k=>`<option value="${esc(k)}">${esc(EQ[k].n)}</option>`).join("")+"</optgroup>").join("");$("eq").value=cur}
+function applyCatalog(snap){
+ CATDOCS=snap.docs.map(d=>({id:d.id,...d.data()}));
+ const act=CATDOCS.filter(d=>d.enabled!==false&&validDoc(d)).sort((a,b)=>(a.order||0)-(b.order||0)||String(a.n).localeCompare(String(b.n)));
+ const old=EQ[cur]?JSON.stringify(EQ[cur]):null;
+ if(act.length){const o={};act.forEach(d=>o[d.id]=docToEq(d));EQ=o}else EQ=JSON.parse(JSON.stringify(EQ0));
+ const keep=!cur||!!EQ[cur];if(!keep)cur=Object.keys(EQ)[0];
+ fillEq();if(ovr&&!ovrAllowed())setOvr(false,false);syncOvr();
+ if(!keep||JSON.stringify(EQ[cur])!==old){$("eq").value=cur;setRange(false);relayout(true)}
+ if(curTab==="admin")renderAdmin()}
+
+// ---------- rôles
+function applyRole(){const mine=ROLES.find(r=>r.id===myId);
+ role=isAdmin?"admin":(mine&&ROLE_LBL[mine.role]?mine.role:(canWrite?"planificateur":"chargeur"));
+ $("tabs").hidden=false;$("t-plan").hidden=role==="chargeur";$("t-admin").hidden=role!=="admin";
+ $("save").hidden=role==="chargeur";$("new").hidden=role==="chargeur";$("rolelbl").textContent=ROLE_LBL[role];
+ if(role==="chargeur"&&(curTab==="plan"||curTab==="admin"))show("proj");else if(role!=="admin"&&curTab==="admin")show("plan");else show(curTab)}
+function show(v){curTab=v;for(const k of["plan","proj","admin","load"])$("v-"+k).hidden=k!==v;
+ document.querySelectorAll("#tabs [data-tab]").forEach(b=>b.classList.toggle("pri",b.dataset.tab===(v==="load"?"proj":v)));
+ if(v==="proj")renderProj();if(v==="admin")renderAdmin()}
+
+// ---------- projets
+async function saveProject(){if(!DB){msg("Sauvegarde non disponible ici : ouvre la page publiée dans Claude.");return}
+ if(!ready()){msg("Choisis un équipement et un type d’essieux avant d’enregistrer.");return}
+ const numP=($("proj").value||"").trim();if(!numP){msg("Entre un N° de projet avant d’enregistrer.");return}
+ if(!items.length){msg("Ajoute au moins une caisse.");return}
+ const id=curProj||newId("p"),prev=PROJ.find(p=>p.id===id),P=plan();
+ const doc=clean({num:numP,status:prev?prev.status:"brouillon",eqId:cur,eqName:EQ[cur].n,cfg:$("cfg").value,season:$("season").value||"normal",tires:$("tires").value||"dual",lifted:liftNow(),front:+$("sl").value,override:ovr,tdId:tdSel,tdName:tdName(),tdWll:wllNow(),
+  items,placed:res.placed,count:items.length,kg:items.reduce((a,b)=>a+b.kg,0),snap:P,createdAt:prev?prev.createdAt:nowIso(),createdBy:prev?prev.createdBy:myId,updatedAt:nowIso(),updatedBy:myId});
+ try{await DB.doc("projects/"+id).set(doc);curProj=id;dirty=false;msg("Expédition « "+numP+" » enregistrée.",true)}catch(e){msg("Enregistrement refusé : "+(e&&(e.message||e.code)||e))}}
+function openProject(id){const p=PROJ.find(x=>x.id===id);if(!p)return;
+ if(!EQ[p.eqId]){alert0("Équipement introuvable dans le catalogue (supprimé ou désactivé).");return}
+ cur=p.eqId;$("eq").value=cur;$("cfg").value=p.cfg;$("season").value=p.season||"normal";$("tires").value=p.tires||"dual";$("lift").checked=!!p.lifted;$("proj").value=p.num;
+ items=p.items.map(i=>({...i}));lockSig={};setRange(false);
+ $("sl").value=Math.min(+$("sl").max,Math.max(+$("sl").min,p.front));
+ const placed=p.placed.map(q=>({...q}));placed.forEach(q=>{if(q.locked){const it=items.find(i=>i.id===q.id);if(it)lockSig[q.id]=sig(it)}});
+ res={placed,rejected:items.filter(i=>!placed.some(q=>q.id===i.id)).map(item=>({item,reason:"Non placée"})),flags:EQ[cur].open?Engine.openFlags(placed,openSp(EQ[cur])):[]};
+ if(p.tdId){if(!TD.some(x=>x.id===p.tdId))TD=TD.concat([{id:p.tdId,n:(p.tdName||"Attache")+" (archivée)",kind:"",wll:p.tdWll||2268}]);tdSel=p.tdId;fillTd()}
+ setOvr(!!p.override,false);lastReady=true;dirty=false;curProj=id;renderCrates();build();ax();msg("");show("plan")}
+function alert0(t){const e=$("pmsg");if(e){e.textContent=t;e.style.color="var(--bad)"}}
+function renderProj(){const el=$("v-proj"),rw=role!=="chargeur";
+ const rows=PROJ.map(p=>{const mine=role==="admin"||p.createdBy===myId,del=pendDel===p.id;
+  return `<tr><td><b>${esc(p.num)}</b></td><td>${esc(p.eqName||"")}</td><td>${cv(p.count+" caisses · "+p.kg+" kg")}</td><td>`+
+  (rw?`<select data-st="${esc(p.id)}">${STATUS.map(s=>`<option ${s===p.status?"selected":""}>${s}</option>`).join("")}</select>`:esc(p.status))+
+  `</td><td class="mut">${fmtDate(p.updatedAt)}</td><td style="white-space:nowrap"><button data-act="view" data-id="${esc(p.id)}">Vue chargeur</button> <button data-act="pdf" data-id="${esc(p.id)}">PDF</button>`+
+  (rw?` <button data-act="open" data-id="${esc(p.id)}">Ouvrir</button>`:"")+(rw&&mine?` <button data-act="del" data-id="${esc(p.id)}">${del?"Confirmer ?":"Supprimer"}</button>`:"")+`</td></tr>`}).join("");
+ el.innerHTML=`<div class="card"><h2>Projets de chargement</h2><span id="pmsg" style="font-size:13px"></span><div style="overflow-x:auto">`+(PROJ.length?`<table class="tbl"><tr><th>N° projet</th><th>Équipement</th><th>Contenu</th><th>Statut</th><th>Mis à jour</th><th></th></tr>${rows}</table>`:`<p class="mut">Aucun projet enregistré. Prépare un chargement dans le planificateur, puis « Enregistrer le projet ».</p>`)+`</div></div>`}
+function showLoader(p){loaderP=p.snap;$("lfr").srcdoc=loaderHTML(p.snap);$("lttl").textContent=p.num;show("load")}
+async function projAction(act,id){const p=PROJ.find(x=>x.id===id);if(!p)return;
+ if(act==="view")showLoader(p);
+ else if(act==="pdf"){if(!window.jspdf){alert0("Bibliothèque PDF non chargée.");return}try{await saveFile(fname(p.snap,"pdf"),buildPDF(p.snap).output("blob"))}catch(e){alert0("Échec du PDF : "+(e.message||e))}}
+ else if(act==="open")openProject(id);
+ else if(act==="del"){if(pendDel!==id){pendDel=id;renderProj();return}pendDel=null;try{await DB.doc("projects/"+id).delete();if(curProj===id)curProj=null}catch(e){renderProj();alert0("Suppression refusée : "+(e.message||e.code))}}}
+
+// ---------- administration
+function renderAdmin(){const el=$("v-admin");
+ el.innerHTML=`<div class="row"><button data-at="eq" class="${adminTab==="eq"?"pri":""}">Équipements</button><button data-at="td" class="${adminTab==="td"?"pri":""}">Attaches</button><button data-at="users" class="${adminTab==="users"?"pri":""}">Utilisateurs</button><span id="amsg" style="font-size:13px"></span></div><div id="abody"></div>`;
+ if(adminTab==="eq")renderEqAdmin();else if(adminTab==="td")renderTdAdmin();else renderUsers()}
+function dimTxt(d){return cv(OPEN_KINDS.includes(d.kind)?(Math.max(...d.zones.map(z=>z.x+z.l))+" mm, "+d.zones.length+" zone"+(d.zones.length>1?"s":"")):[d.l,d.w,d.h].map(v=>cv(v+" mm")).join(" × "))}
+function renderEqAdmin(){const b=$("abody"),docs=(CATDOCS||[]).slice().sort((a,c)=>(a.order||0)-(c.order||0));
+ const rows=docs.map(d=>`<tr><td><b>${esc(d.n)}</b></td><td>${KINDS[d.kind]||esc(d.kind)}</td><td>${validDoc(d)?dimTxt(d):"<span class=\"bad\">incomplet</span>"}</td><td>${cv(d.kg+" kg")}</td><td>${cv(d.tareKg+" kg")}</td><td><input type="checkbox" data-en="${esc(d.id)}" ${d.enabled!==false?"checked":""} aria-label="Actif"></td><td style="white-space:nowrap"><button data-ed="${esc(d.id)}">Modifier</button> <button data-eq-del="${esc(d.id)}">${pendDel==="e"+d.id?"Confirmer ?":"Supprimer"}</button></td></tr>`).join("");
+ const missing=Object.keys(EQ0).filter(k=>!(CATDOCS||[]).some(d=>d.id===k)).length;
+ b.innerHTML=`<div class="card"><h2>Catalogue d’équipements (conteneurs et remorques)</h2>
+ <div class="row"><button class="pri" data-ea="new">+ Nouvel équipement</button>`+(missing?`<button data-ea="seed">Importer le catalogue de base (${missing})</button>`:"")+`</div>
+ <div style="overflow-x:auto">`+(docs.length?`<table class="tbl"><tr><th>Nom</th><th>Catégorie</th><th>Dimensions</th><th>Charge utile</th><th>Tare</th><th>Actif</th><th></th></tr>${rows}</table>`:`<p class="mut">Le catalogue est vide : le planificateur utilise le catalogue de base. Importe-le pour le modifier.</p>`)+`</div></div>`+(eqForm?eqFormHTML():"")}
+function eqFormHTML(){const f=eqForm,o=OPEN_KINDS.includes(f.kind);
+ const UF={hbH:"len",legalH:"len",legalW:"len",l:"len",w:"len",h:"len",kg:"kg",tareKg:"kg",kingpinX:"len",cogX:"len"};
+ const I=(k,l,w)=>`<label class="fl">${ulab(l)}<input data-ef="${k}" data-ut="${UF[k]}" type="number" step="any" value="${f[k]===undefined||f[k]===""?"":du(f[k],UF[k])}" style="width:${w||110}px"></label>`;
+ const zr=o?f.zones.map((z,i)=>`<tr><td><input data-ez="${i}" data-f="name" type="text" value="${esc(z.name)}" style="width:130px"></td>`+["x","z","l","w"].map(c=>`<td><input data-ez="${i}" data-f="${c}" type="number" step="any" value="${du(z[c],"len")}" style="width:90px"></td>`).join("")+`<td><button data-zdel="${i}" ${f.zones.length<2?"disabled":""} aria-label="Retirer la zone">×</button></td></tr>`).join(""):"";
+ return `<div class="card" style="margin-top:12px"><h2>${f.id?"Modifier":"Nouvel"} équipement</h2><div class="row">
+ <label class="fl">Nom<input data-ef="n" type="text" value="${esc(f.n)}" style="width:230px"></label>
+ <label class="fl">Catégorie<select data-ef="kind">${Object.keys(KINDS).map(k=>`<option value="${k}" ${k===f.kind?"selected":""}>${KINDS[k]}</option>`).join("")}</select></label></div>
+ <div class="row">`+(o?I("legalH","Hauteur légale (mm)")+I("legalW","Largeur légale (mm)"):I("l","Longueur int. (mm)")+I("w","Largeur int. (mm)")+I("h","Hauteur int. (mm)"))+`</div>`+
+ (o?`<div style="overflow-x:auto"><table class="tbl"><tr><th>Zone</th><th>${ulab("Début x (mm)")}</th><th>${ulab("Plancher z (mm)")}</th><th>${ulab("Longueur (mm)")}</th><th>${ulab("Largeur (mm)")}</th><th></th></tr>${zr}</table></div><div class="row" style="margin-top:6px"><button data-ea="zone">+ Zone</button><small>x = distance depuis le nez, z = hauteur du plancher depuis le sol.</small></div><div class="row" style="margin-top:8px"><label class="mut"><input type="checkbox" data-ef="hb" ${f.hb?"checked":""}> Poutre frontale (headerboard)</label>${f.hb?I("hbH","Hauteur de la poutre (mm)"):""}</div>`:"")+
+ `<div class="row"><label class="mut"><input type="checkbox" data-ef="ovr" ${f.ovr!==false?"checked":""}> Permettre « Override weight and dims » sur cet équipement</label></div><div class="row">`+I("kg","Charge utile (kg)")+I("tareKg","Tare remorque (kg)")+I("kingpinX","Pivot d’attelage x (mm)")+I("cogX","Centre de gravité à vide x (mm)")+`</div>
+ <div class="row"><button class="pri" data-ea="save">Enregistrer</button><button data-ea="cancel">Annuler</button></div><small>${cv("Au-delà de 16 200 mm de longueur, la semi dépasse la limite du guide (§3.1.6) : le planificateur le signalera.")}</small></div>`}
+function eqFormToDoc(){const f=eqForm,o=OPEN_KINDS.includes(f.kind),n=v=>Math.round(+v);
+ if(!String(f.n).trim())return"Le nom est obligatoire.";
+ const d={n:String(f.n).trim(),kind:f.kind,enabled:f.enabled!==false,ovr:f.ovr!==false,order:f.order??999,kg:n(f.kg),tareKg:n(f.tareKg),kingpinX:n(f.kingpinX),cogX:n(f.cogX)};
+ if(!(d.kg>0))return"La charge utile doit être positive.";if(!(d.tareKg>=0)||!(d.kingpinX>=0)||!(d.cogX>=0))return"Tare, pivot et centre de gravité doivent être des nombres positifs.";
+ if(o){d.hb=!!f.hb;d.hbH=n(f.hbH||0);if(d.hb&&!(d.hbH>0))return"Entre la hauteur de la poutre frontale.";d.legalH=n(f.legalH);d.legalW=n(f.legalW);if(!(d.legalH>0&&d.legalW>0))return"Hauteur et largeur légales obligatoires.";
+  d.zones=f.zones.map(z=>({name:String(z.name||"Zone").trim()||"Zone",x:n(z.x),z:n(z.z),l:n(z.l),w:n(z.w)}));
+  if(!d.zones.length||d.zones.some(z=>!(z.l>0&&z.w>0&&z.x>=0&&z.z>=0)))return"Chaque zone doit avoir une longueur, une largeur et une position valides.";
+  const s=[...d.zones].sort((a,b)=>a.x-b.x);for(let i=1;i<s.length;i++)if(s[i].x<s[i-1].x+s[i-1].l)return"Des zones se chevauchent (début x plus petit que la fin de la zone précédente).";
+  const L=Math.max(...d.zones.map(z=>z.x+z.l));if(d.kingpinX>=L||d.cogX>L)return"Le pivot et le centre de gravité doivent être dans la longueur de la remorque."}
+ else{d.l=n(f.l);d.w=n(f.w);d.h=n(f.h);if(!(d.l>0&&d.w>0&&d.h>0))return"Longueur, largeur et hauteur obligatoires.";if(d.kingpinX>=d.l||d.cogX>d.l)return"Le pivot et le centre de gravité doivent être dans la longueur."}
+ return d}
+async function eqAction(a){
+ if(a==="new"){eqForm={id:null,n:"",kind:"plateau",ovr:true,hb:false,hbH:1220,kg:20000,tareKg:7000,kingpinX:1100,cogX:8000,l:12000,w:2400,h:2700,legalH:4150,legalW:2600,zones:[{name:"Plancher",x:0,z:1500,l:14630,w:2600}],order:(CATDOCS||[]).length};renderEqAdmin()}
+ else if(a==="cancel"){eqForm=null;amsg("");renderEqAdmin()}
+ else if(a==="zone"){const l=eqForm.zones[eqForm.zones.length-1];eqForm.zones.push({name:"Zone "+(eqForm.zones.length+1),x:l?l.x+l.l:0,z:l?l.z:1500,l:3000,w:l?l.w:2600});renderEqAdmin()}
+ else if(a==="seed"){try{let i=(CATDOCS||[]).length;for(const k in EQ0)if(!(CATDOCS||[]).some(d=>d.id===k))await DB.doc("equipment/"+k).set(clean(eqToDoc(k,EQ0[k],i++)));amsg("Catalogue de base importé.",true)}catch(e){amsg("Refusé : "+(e.message||e.code))}}
+ else if(a==="save"){const d=eqFormToDoc();if(typeof d==="string"){amsg(d);return}
+  const id=eqForm.id||newId("e");try{await DB.doc("equipment/"+id).set(clean(d));eqForm=null;amsg("Équipement enregistré.",true);renderEqAdmin()}catch(e){amsg("Refusé : "+(e.message||e.code))}}}
+function renderUsers(){const b=$("abody");
+ b.innerHTML=`<div class="card"><h2>Utilisateurs et rôles</h2>
+ <p class="mut" style="font-size:13px;margin:0 0 8px">Les propriétaires et éditeurs de la page sont administrateurs. Les autres personnes reçoivent le rôle choisi ici. L’accès à la page lui-même se donne avec le menu Partager (Lecteur, Contributeur, Éditeur).</p>
+ <div class="row"><input id="usq" type="text" placeholder="Chercher une personne (nom)…" style="width:260px"><button data-ua="search">Chercher</button></div><div id="usr"></div><div id="ulist"></div></div>`;listUsers()}
+async function listUsers(){const el=$("ulist");if(!el)return;const ids=ROLES.map(r=>r.id);let ps={};try{ps=ids.length?await USR.profiles(ids):{}}catch(e){}
+ el.innerHTML=ids.length?`<table class="tbl"><tr><th>Personne</th><th>Rôle</th><th></th></tr>`+ROLES.map(r=>`<tr><td>${esc((ps[r.id]&&ps[r.id].name)||"Utilisateur")}${r.id===myId?" (toi)":""}</td><td><select data-ur="${esc(r.id)}">${["planificateur","chargeur","admin"].map(x=>`<option value="${x}" ${x===r.role?"selected":""}>${ROLE_LBL[x]}</option>`).join("")}</select></td><td><button data-urm="${esc(r.id)}">Retirer</button></td></tr>`).join("")+"</table>":`<p class="mut">Aucun rôle attribué. Sans rôle, une personne qui peut modifier la page est planificateur, les autres sont chargeurs.</p>`}
+async function userSearch(){const q=($("usq").value||"").trim(),el=$("usr");if(!q){el.innerHTML="";return}
+ try{const hits=await USR.search(q);el.innerHTML=hits.length?`<div class="row">`+hits.filter(h=>!ROLES.some(r=>r.id===h.id)).slice(0,8).map(h=>`<button data-uadd="${esc(h.id)}">+ ${esc(h.name||"Sans nom")}</button>`).join("")+`</div>`:`<p class="mut">Aucun résultat.</p>`}catch(e){el.innerHTML=`<p class="bad">Recherche indisponible.</p>`}}
+
+
+// ---------- catalogue d'attaches (sangles, chaînes) : capacité de travail (WLL) lue sur l'étiquette
+let tdForm=null;
+const TD_KINDS={sangle:"Sangle",chaine:"Chaîne",autre:"Autre"};
+const validTd=d=>d&&typeof d.n==="string"&&isNum(d.wll)&&d.wll>0;
+function applyTiedowns(snap){TDOCS=snap.docs.map(d=>({id:d.id,...d.data()}));
+ const act=TDOCS.filter(d=>d.enabled!==false&&validTd(d)).sort((a,b)=>String(a.n).localeCompare(String(b.n)));
+ TD=act.length?act.map(d=>({id:d.id,n:d.n,kind:d.kind,wll:d.wll})):TD0.slice();
+ if(!TD.some(x=>x.id===tdSel))tdSel=TD[0]?TD[0].id:"";
+ fillTd();if(ready())ax();if(curTab==="admin"&&adminTab==="td")renderAdmin()}
+function renderTdAdmin(){const b=$("abody"),docs=(TDOCS||[]).slice().sort((a,c)=>String(a.n).localeCompare(String(c.n)));
+ const rows=docs.map(d=>`<tr><td><b>${esc(d.n)}</b></td><td>${TD_KINDS[d.kind]||esc(d.kind||"")}</td><td>${validTd(d)?esc(cv(d.wll+" kg")):"<span class=\"bad\">invalide</span>"}</td><td><input type="checkbox" data-ten="${esc(d.id)}" ${d.enabled!==false?"checked":""} aria-label="Actif"></td><td style="white-space:nowrap"><button data-ted="${esc(d.id)}">Modifier</button> <button data-tdel="${esc(d.id)}">${pendDel==="t"+d.id?"Confirmer ?":"Supprimer"}</button></td></tr>`).join("");
+ const f=tdForm;
+ b.innerHTML=`<div class="card"><h2>Attaches (sangles et chaînes)</h2><p class="mut" style="font-size:13px;margin:0 0 8px">Entre la capacité de travail (WLL) inscrite sur l’étiquette. ${esc(cv("Le guide exige au moins 2 268 kg par attache pour les machines de 4 500 kg et plus."))}</p>
+ <div class="row"><button class="pri" data-ta="new">+ Nouvelle attache</button>`+""+`</div>
+ <div style="overflow-x:auto">`+(docs.length?`<table class="tbl"><tr><th>Nom</th><th>Type</th><th>Capacité (WLL)</th><th>Actif</th><th></th></tr>${rows}</table>`:`<p class="mut">Aucune attache enregistrée. Ajoutes-en une : sans attache, ${esc(cv("le calcul utilise le minimum du guide (2 268 kg)."))}</p>`)+`</div></div>`+
+ (f?`<div class="card" style="margin-top:12px"><h2>${f.id?"Modifier":"Nouvelle"} attache</h2><div class="row"><label class="fl">Nom<input data-tf="n" type="text" value="${esc(f.n)}" style="width:260px"></label>
+ <label class="fl">Type<select data-tf="kind">${Object.keys(TD_KINDS).map(k=>`<option value="${k}" ${k===f.kind?"selected":""}>${TD_KINDS[k]}</option>`).join("")}</select></label>
+ <label class="fl">${ulab("Capacité WLL (kg)")}<input data-tf="wll" data-ut="kg" type="number" step="any" value="${f.wll===""?"":du(f.wll,"kg")}" style="width:120px"></label></div>
+ <div class="row"><button class="pri" data-ta="save">Enregistrer</button><button data-ta="cancel">Annuler</button></div></div>`:"")}
+async function tdAction(a){
+ if(a==="new"){tdForm={id:null,n:"",kind:"sangle",wll:2268,enabled:true};renderTdAdmin()}
+ else if(a==="cancel"){tdForm=null;amsg("");renderTdAdmin()}
+ else if(a==="save"){const n=String(tdForm.n||"").trim(),w=Math.round(+tdForm.wll);if(!n){amsg("Le nom est obligatoire.");return}if(!(w>0)){amsg("La capacité doit être positive.");return}
+  const id=tdForm.id||newId("t");try{await DB.doc("tiedowns/"+id).set({n,kind:tdForm.kind||"autre",wll:w,enabled:tdForm.enabled!==false});tdForm=null;amsg("Attache enregistrée.",true);renderTdAdmin()}catch(e){amsg("Refusé : "+(e.message||e.code))}}}
+
+// ---------- événements
+function wireAdmin(){
+ document.querySelectorAll("#tabs [data-tab]").forEach(b=>b.onclick=()=>show(b.dataset.tab));
+ $("save").onclick=saveProject;$("lback").onclick=()=>show("proj");$("lpdf").onclick=async()=>{if(loaderP&&window.jspdf)await saveFile(fname(loaderP,"pdf"),buildPDF(loaderP).output("blob"))};
+ $("v-proj").onclick=e=>{const b=e.target.closest("[data-act]");if(b)projAction(b.dataset.act,b.dataset.id)};
+ $("v-proj").onchange=async e=>{const id=e.target.dataset&&e.target.dataset.st;if(!id)return;try{await DB.doc("projects/"+id).update({status:e.target.value,updatedAt:nowIso(),updatedBy:myId})}catch(x){alert0("Refusé : "+(x.message||x.code))}};
+ $("v-admin").onclick=async e=>{const t=e.target.closest("button,input");if(!t)return;const d=t.dataset;
+  if(d.at){adminTab=d.at;pendDel=null;renderAdmin();return}
+  if(d.ea){eqAction(d.ea);return}
+  if(d.ta){tdAction(d.ta);return}
+  if(d.ted){const x=TDOCS.find(c=>c.id===d.ted);if(x){tdForm=clean({id:x.id,enabled:true,...x});amsg("");renderTdAdmin()}return}
+  if(d.tdel){const id=d.tdel;if(pendDel!=="t"+id){pendDel="t"+id;renderTdAdmin();return}pendDel=null;try{await DB.doc("tiedowns/"+id).delete();amsg("Attache supprimée.",true)}catch(x){amsg("Refusé : "+(x.message||x.code))}return}
+  if(d.ed){const x=CATDOCS.find(c=>c.id===d.ed);if(x){eqForm=clean({id:x.id,l:12000,w:2400,h:2700,legalH:4150,legalW:2600,zones:[{name:"Plancher",x:0,z:1500,l:14630,w:2600}],...x});amsg("");renderEqAdmin()}return}
+  if(d.eqDel){const id=d.eqDel,used=PROJ.filter(p=>p.eqId===id).length;if(used){amsg("Utilisé par "+used+" projet(s) : désactive-le plutôt (case Actif).");return}
+   if(pendDel!=="e"+id){pendDel="e"+id;renderEqAdmin();return}pendDel=null;try{await DB.doc("equipment/"+id).delete();amsg("Équipement supprimé.",true)}catch(x){amsg("Refusé : "+(x.message||x.code))}return}
+  if(d.zdel!==undefined&&eqForm){eqForm.zones.splice(+d.zdel,1);renderEqAdmin();return}
+  if(d.ua==="search"){userSearch();return}
+  if(d.uadd){try{await DB.doc("roles/"+d.uadd).set({role:"planificateur",addedAt:nowIso()});$("usr").innerHTML="";}catch(x){amsg("Refusé : "+(x.message||x.code))}return}
+  if(d.urm){try{await DB.doc("roles/"+d.urm).delete()}catch(x){amsg("Refusé : "+(x.message||x.code))}return}};
+ $("v-admin").onchange=async e=>{const t=e.target,d=t.dataset;
+  if(d.ten){try{await DB.doc("tiedowns/"+d.ten).update({enabled:t.checked})}catch(x){amsg("Refusé : "+(x.message||x.code));t.checked=!t.checked}return}
+  if(d.tf&&tdForm){tdForm[d.tf]=d.tf==="wll"?pu(+t.value,"kg"):t.value;return}
+ if(d.en){try{await DB.doc("equipment/"+d.en).update({enabled:t.checked})}catch(x){amsg("Refusé : "+(x.message||x.code));t.checked=!t.checked}return}
+  if(d.ur){try{await DB.doc("roles/"+d.ur).set({role:t.value,addedAt:nowIso()})}catch(x){amsg("Refusé : "+(x.message||x.code))}return}
+  if(!eqForm)return;
+  if(d.ef){const k=d.ef;eqForm[k]=t.type==="checkbox"?t.checked:t.type==="number"?pu(+t.value,d.ut):t.value;if(k==="hb"){if(t.checked&&!eqForm.hbH)eqForm.hbH=1220;renderEqAdmin();return}if(k==="kind"){const o=OPEN_KINDS.includes(t.value);if(o&&!eqForm.zones)eqForm.zones=[{name:"Plancher",x:0,z:1500,l:14630,w:2600}];renderEqAdmin()}return}
+  if(d.ez!==undefined){const z=eqForm.zones[+d.ez];z[d.f]=d.f==="name"?t.value:pu(+t.value,"len")}};
+ $("v-admin").onkeydown=e=>{if(e.key==="Enter"&&e.target.id==="usq")userSearch()}}
+async function initDb(){try{const c=window.claude;if(!c||!c.use)return;
+ const [d,u]=await Promise.all([c.use("db"),c.use("user")]);if(!d||!u)return;DB=d;USR=u;
+ myId=await u.id();isAdmin=await u.canEdit();const w=await u.can("data.write");canWrite=w!==false;
+ wireAdmin();
+ DB.collection("equipment").onSnapshot(applyCatalog,()=>{});
+ DB.collection("tiedowns").onSnapshot(applyTiedowns,()=>{});
+ DB.collection("roles").onSnapshot(s=>{ROLES=s.docs.map(x=>({id:x.id,...x.data()}));applyRole();if(curTab==="admin"&&adminTab==="users")listUsers()},()=>{});
+ DB.collection("projects").orderBy("updatedAt","desc").limit(300).onSnapshot(s=>{PROJ=s.docs.map(x=>({id:x.id,...x.data()}));if(curTab==="proj")renderProj()},()=>{});
+ applyRole()}catch(e){}}
+initDb();
+
+// ---- glisser-déposer
+const ray=new THREE.Raycaster(),pln=new THREE.Plane(),vv=new THREE.Vector3(),nm=new THREE.Vector3();
+const ndc=e=>{const r=ren.domElement.getBoundingClientRect();return new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1)};
+function sync(){grp.updateMatrixWorld(true);cam.updateMatrixWorld(true)}
+function pick(e){sync();ray.setFromCamera(ndc(e),cam);const h=ray.intersectObjects(meshes,false);return h.length?h[0].object.userData.id:null}
+function planePoint(e,p){sync();ray.setFromCamera(ndc(e),cam);nm.set(0,1,0).applyQuaternion(grp.quaternion);
+ const pt=new THREE.Vector3(0,(p.z+p.h/2)/1e3,0);inner.localToWorld(pt);pln.setFromNormalAndCoplanarPoint(nm,pt);
+ if(!ray.ray.intersectPlane(pln,vv))return null;inner.worldToLocal(vv);return{x:vv.x*1e3,y:vv.z*1e3}}
+const snap=v=>Math.round(v/50)*50;
+const inB=s=>ovr?(()=>true):s.open?(q=>{const z=s.zones[q.zi||0];return q.x>=z.x&&q.x+q.pl<=z.x+z.l&&q.y>=-500&&q.y+q.pw<=z.w+500}):(q=>q.x>=0&&q.y>=0&&q.x+q.pl<=s.l&&q.y+q.pw<=s.w&&q.z+q.h<=s.h);
+const flo=s=>s.open?(q=>s.zones[q.zi||0].z):(()=>0);
+let dr=null,drag=null;
+function tryMove(p,nx,ny){const s=EQ[cur];
+ for(const [x,y] of [[nx,ny],[nx,p.y],[p.x,ny]]){if(x===p.x&&y===p.y)continue;const ox=p.x,oy=p.y;p.x=x;p.y=y;
+  if(Engine.validLayout(res.placed,inB(s),flo(s))){p.locked=true;dirty=true;p.over=false;lockSig[p.id]=sig(items.find(i=>i.id===p.id)||p);drag.moved=true;
+   const m=meshes.find(k=>k.userData.id===p.id);m.position.set((x+p.pl/2)/1e3,(p.z+p.h/2)/1e3,(y+p.pw/2)/1e3);
+   ax();return}
+  p.x=ox;p.y=oy}}
+view.onpointerdown=e=>{view.setPointerCapture(e.pointerId);const id=pick(e);
+ if(id){const p=res.placed.find(q=>q.id===id),pt=planePoint(e,p);if(pt){drag={p,ox:pt.x-p.x,oy:pt.y-p.y,moved:false};view.style.cursor="grabbing";return}}
+ dr=[e.clientX,e.clientY]};
+view.onpointerup=()=>{const m=drag&&drag.moved;drag=null;dr=null;view.style.cursor="grab";if(m){build();ax()}};
+view.onpointermove=e=>{
+ if(drag){const pt=planePoint(e,drag.p);if(pt)tryMove(drag.p,snap(pt.x-drag.ox),snap(pt.y-drag.oy));return}
+ if(!dr)return;ry+=(e.clientX-dr[0])*.008;rx=Math.max(-.2,Math.min(1.2,rx+(e.clientY-dr[1])*.008));dr=[e.clientX,e.clientY];draw()};
+$("eq").onchange=()=>{dirty=true;setEq()};$("cfg").onchange=reflow;$("lift").onchange=reflow;$("season").onchange=reflow;$("tires").onchange=reflow;
+
+function initTheme(){const b=$("thm"),de=document.documentElement;if(!b||!de||!de.setAttribute)return;let m="auto";try{m=localStorage.getItem("thm")||"auto"}catch(e){}const L={auto:"auto",light:"clair",dark:"sombre"},ap=()=>{if(m==="auto")de.removeAttribute("data-theme");else de.setAttribute("data-theme",m);b.textContent="Thème : "+L[m];b.setAttribute("aria-label","Changer le thème (auto, clair, sombre)")};ap();b.onclick=()=>{m=m==="auto"?"light":m==="light"?"dark":"auto";try{localStorage.setItem("thm",m)}catch(e){}ap()}}
+initTheme();
+$("tdn").onchange=()=>{tdSel=$("tdn").value;dirty=true;if(ready())ax()};$("new").onclick=()=>newShipment(false);$("unt").onclick=()=>setUnits(!imp);$("ovr").onclick=()=>setOvr(!ovr,true);$("pdf").onclick=exportPDF;$("shr").onclick=exportLoader;
+$("add").onclick=()=>{items.push({id:nextId(),name:"Caisse",type:"colis",blocked:false,l:1200,w:1000,h:1000,kg:500,stackable:true,rotate:true,stop:1});msg("");renderCrates();relayout();const q=$("crates").querySelectorAll?$("crates").querySelectorAll('input[data-f="id"]'):[];if(q.length)q[q.length-1].focus()};
+$("crates").onclick=e=>{const d=e.target.dataset&&e.target.dataset.del;if(d==null||d==="")return;items.splice(+d,1);msg("");renderCrates();relayout()};
+$("crates").onchange=e=>{const t=e.target,f=t.dataset&&t.dataset.f;if(!f)return;const it=items[+t.dataset.i];let v;
+ if(f==="id"){v=t.value.trim();if(!v||items.some((o,j)=>o!==it&&o.id===v)){msg("N° « "+v+" » vide ou déjà utilisé.");t.value=it.id;return}}
+ else if(f==="name")v=t.value;
+ else if(f==="type")v=t.value;
+ else if(f==="stackable"||f==="rotate"||f==="blocked")v=t.checked;
+ else{const x=+t.value;v=f==="stop"?Math.round(x):imp?(f==="kg"?Math.round(x/IMP_K):Math.round(x*25.4)):Math.round(x);if(!(v>0)){msg("Valeur invalide.");t.value=disp(f,it[f]);return}if(f==="stop")v=Math.min(3,v)}
+ it[f]=v;msg("");if(f==="stop")renderCrates();relayout()};
+
+$("sl").oninput=ax;
+addEventListener("resize",()=>{size();draw()});size();setEq();
+try{setUnits(localStorage.getItem("unt")==="imp")}catch(e){setUnits(false)}
+</script></body></html>
