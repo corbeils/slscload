@@ -173,8 +173,8 @@ export function packAny(space: Space, items: Item[], opts: PackOpts = {}) {
   return spill(pack(space, items, opts), { l: space.l, w: space.w, h: space.h, x0: space.l, z: 0 });
 }
 
-// Centrage latéral par défaut : une pièce (avec ce qui est empilé dessus) qui n'a aucune autre pièce
-// à côté d'elle (même plage de x) est centrée sur la largeur du plancher. Les pièces fixées à la main sont laissées telles quelles.
+// Centrage latéral par défaut : chaque rangée de pièces (même plage de x, avec ce qui est empilé dessus)
+// est centrée gauche-droite sur la largeur du plancher, que les pièces soient seules ou côte à côte. Les pièces fixées à la main sont laissées telles quelles.
 export function centerY(placed: Placed[], zones: { z: number; w: number }[]): void {
   const byZone = new Map<number, Placed[]>();
   for (const p of placed) {
@@ -198,8 +198,9 @@ export function centerY(placed: Placed[], zones: { z: number; w: number }[]): vo
       }
       if (cl.some((p) => p.locked)) continue;
       const floor = cl.filter((p) => p.z <= zn.z + 5);
-      if (floor.length !== 1) continue;
-      const d = (zn.w - floor[0].pw) / 2 - floor[0].y;
+      if (!floor.length) continue;
+      const lo = Math.min(...floor.map((p) => p.y)), hi = Math.max(...floor.map((p) => p.y + p.pw));
+      const d = (zn.w - (hi - lo)) / 2 - lo;
       if (Math.abs(d) < 1) continue;
       for (const p of cl) p.y = Math.round(p.y + d);
     }
