@@ -27,7 +27,7 @@ function buildPDF(P){
  const W=ymax-ymin,Hh=zmax,Lx=Math.max(D.l,...pcs.map(p=>p.x+p.pl));
  const sc=Math.min(CW/(Lx+200),138/(W+2*Hh));
  let pg=1;
- const head=()=>{doc.setFont("helvetica","bold");doc.setFontSize(15);doc.setTextColor(0);doc.text(P.title||"Plan de chargement",M,M+5);
+ const head=()=>{doc.setFillColor(140,219,0);doc.rect(0,0,PW,2.2,"F");doc.setFont("helvetica","bold");doc.setFontSize(7.5);doc.setTextColor(14,17,19);doc.text("STEVE CORBEIL",PW-M-34,M+1.5,{align:"right"});doc.setTextColor(90,154,0);doc.text("STRATÈGE LOGISTIQUE",PW-M,M+1.5,{align:"right"});doc.setFont("helvetica","bold");doc.setFontSize(15);doc.setTextColor(0);doc.setTextColor(0);doc.text(P.title||"Plan de chargement",M,M+5);
   doc.setFont("helvetica","normal");doc.setFontSize(9.5);doc.setTextColor(80);
   doc.text(cv(P.eq.n+"  |  "+P.cfg+"  |  "+P.season+"  |  "+P.date+"  |  "+pcs.length+" caisses, "+pcs.reduce((a,b)=>a+b.kg,0)+" kg"),M,M+11);doc.setTextColor(0)};
  const foot=()=>{doc.setFontSize(7);doc.setTextColor(110);doc.text("Règles : Guide des normes de charges et dimensions, édition 2026 (MTMD Québec), indicatif : le règlement fait foi. Arrimage à vérifier selon la norme en vigueur.",M,PH-5);doc.text("Page "+pg,PW-M,PH-5,{align:"right"});doc.setTextColor(0)};

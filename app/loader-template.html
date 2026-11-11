@@ -3,14 +3,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Plan de chargement</title>
 <style>
-:root{--bg:#f6f5f1;--fg:#1d1d1b;--mut:#6b6a64;--card:#fff;--bd:#dcdad2;--ok:#2e7d4f;--bad:#c0392b;--acc:#2c6fd6;--sel:#fff3bf;color-scheme:light}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1b19;--fg:#ecebe5;--mut:#9d9c94;--card:#262624;--bd:#3a3a36;--ok:#5cc189;--bad:#ef7a6c;--acc:#6aa3f5;--sel:#4a4320;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#1b1b19;--fg:#ecebe5;--mut:#9d9c94;--card:#262624;--bd:#3a3a36;--ok:#5cc189;--bad:#ef7a6c;--acc:#6aa3f5;--sel:#4a4320;color-scheme:dark}
+:root{--bg:#f4f6f2;--fg:#0e1113;--mut:#5b6470;--card:#fff;--bd:#d6dbd9;--ok:#3d7a00;--bad:#c0392b;--acc:#8cdb00;--onacc:#0e1113;--brand:#5a9a00;--sel:#e6f7bd;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1113;--fg:#e5e7eb;--mut:#9ca3af;--card:#161a1d;--bd:#2a3036;--ok:#8cdb00;--bad:#ef7a6c;--acc:#8cdb00;--onacc:#0e1113;--brand:#8cdb00;--sel:#2a3a12;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1113;--fg:#e5e7eb;--mut:#9ca3af;--card:#161a1d;--bd:#2a3036;--ok:#8cdb00;--bad:#ef7a6c;--acc:#8cdb00;--onacc:#0e1113;--brand:#8cdb00;--sel:#2a3a12;color-scheme:dark}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;padding:env(safe-area-inset-top,0) 0 env(safe-area-inset-bottom,0)}
 main{max-width:1200px;margin:0 auto;padding:16px}
 h1{font-size:20px;margin:0}.sub{color:var(--mut);font-size:14px;margin:2px 0 12px}
 button{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:6px 11px;cursor:pointer}
-button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+button.on{background:var(--acc);border-color:var(--acc);color:var(--onacc);font-weight:700}
 .bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center}
 .lay{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px}@media(max-width:900px){.lay{grid-template-columns:1fr}}
 #view{background:var(--card);border:1px solid var(--bd);border-radius:12px;height:min(58vh,520px);min-height:300px;cursor:grab;overflow:hidden;touch-action:none;position:relative}
@@ -26,7 +26,7 @@ tr.sel td{background:var(--sel)}tr.done td{opacity:.45}tr{cursor:pointer}
 .hint{font-size:12.5px;color:var(--mut);margin:6px 0 0}
 @media print{.bar,.hint,#view{display:none}.tw{max-height:none}body{background:#fff}}
 </style></head><body><main>
-<h1 id="ttl"></h1><div class="sub" id="sub"></div>
+<div style="font-weight:800;letter-spacing:.06em;font-size:12px;margin-bottom:4px"><span style="color:var(--fg)">STEVE CORBEIL</span> <span style="color:var(--brand,#8cdb00)">· STRATÈGE LOGISTIQUE</span></div><h1 id="ttl"></h1><div class="sub" id="sub"></div>
 <div class="bar"><button data-v="3d" class="on">3D</button><button data-v="top">Dessus</button><button data-v="side">Côté</button><button data-v="rear">Arrière</button><button id="prt">Imprimer</button><button id="unt"></button><button id="thm"></button><span class="mut" id="prog"></span></div>
 <div class="lay">
 <div><div id="view"></div><p class="hint">Glisser = tourner · molette ou 2 doigts = zoom · toucher une caisse = la repérer dans la liste · portes à droite. Couleur = arrêt (<span class="sw" style="background:#e07a3f"></span>1 <span class="sw" style="background:#3f8fe0"></span>2 <span class="sw" style="background:#4fb06d"></span>3).</p></div>
