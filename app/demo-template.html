@@ -23,7 +23,7 @@ button:disabled,select:disabled{opacity:.5}
 small,.mut{color:var(--mut)}
 #crates table{border-collapse:collapse;font-size:13px;width:100%}#crates td,#crates th{padding:3px 4px;text-align:left;white-space:nowrap}#crates th{color:var(--mut);font-weight:600}#crates input[type=text],#crates input[type=number]{padding:4px 6px;width:70px}#crates input.nm{width:130px}#crates input.id{width:84px;font-weight:700}#crates input.st{width:46px}#crates button{padding:3px 8px}ul{margin:0;padding-left:18px}
 </style></head><body><main>
-<div class="row" style="justify-content:space-between"><div class="brand"><span class="logo" aria-hidden="true"><svg viewBox="0 0 100 64" width="100%" height="100%" aria-hidden="true"><g transform="skewX(-12) translate(10 0)" fill="none" stroke-linejoin="round"><path d="M44 16H21C11 16 11 32 21 32H31C41 32 41 48 31 48H6" stroke="#dfe1e6" stroke-width="11" stroke-linecap="butt"/><path d="M92 16H66C54 16 54 48 66 48H92" stroke="#dfe1e6" stroke-width="11" stroke-linecap="butt"/><path d="M38 24L26 60" stroke="#8cdb00" stroke-width="3.2" stroke-dasharray="5 3.5"/></g></svg></span><div><div class="bt">STEVE CORBEIL</div><div class="bs">Planificateur de chargement</div></div></div><span><span id="rolelbl" class="mut" style="font-size:13px;margin-right:8px"></span><button id="unt"></button> <button id="thm"></button></span></div>
+<div class="row" style="justify-content:space-between"><div class="brand"><span class="logo" aria-hidden="true"><svg viewBox="0 0 100 64" width="100%" height="100%" aria-hidden="true"><g transform="skewX(-12) translate(10 0)" fill="none" stroke-linejoin="round"><path d="M44 16H21C11 16 11 32 21 32H31C41 32 41 48 31 48H6" stroke="#dfe1e6" stroke-width="11" stroke-linecap="butt"/><path d="M92 16H66C54 16 54 48 66 48H92" stroke="#dfe1e6" stroke-width="11" stroke-linecap="butt"/><path d="M38 24L26 60" stroke="#8cdb00" stroke-width="3.2" stroke-dasharray="5 3.5"/></g></svg></span><div><div class="bt">STEVE CORBEIL</div><div class="bs">Planificateur de chargement</div></div></div><span><span id="rolelbl" class="mut" style="font-size:13px;margin-right:8px"></span><button id="auth" hidden></button> <button id="unt"></button> <button id="thm"></button></span></div>
 <div class="row" id="tabs" hidden><button data-tab="plan" id="t-plan" class="pri">Planificateur</button><button data-tab="proj" id="t-proj">Projets</button><button data-tab="admin" id="t-admin" hidden>Admin</button></div>
 <div id="v-plan">
 <div class="row">
@@ -339,11 +339,11 @@ async function exportPDF(){const P=plan();if(!P.pieces.length){msg("Aucune caiss
  if(!window.jspdf){msg("Bibliothèque PDF non chargée (connexion requise).");return}
  try{msg("");const doc=buildPDF(P);await saveFile(fname(P,"pdf"),doc.output("blob"))}catch(e){msg("Échec du PDF : "+(e.message||e))}}
 // ---- catalogue, projets et administration (capacité db, partagée entre les utilisateurs)
-let DB=null,USR=null,myId=null,isAdmin=false,canWrite=true,role="planificateur",ROLES=[],PROJ=[],CATDOCS=null,curProj=null,curTab="plan",adminTab="eq",eqForm=null,pendDel=null,loaderP=null;
+let DB=null,USR=null,myId=null,isAdmin=false,logged=false,autoSeeded=false,canWrite=true,role="planificateur",ROLES=[],PROJ=[],CATDOCS=null,curProj=null,curTab="plan",adminTab="eq",eqForm=null,pendDel=null,loaderP=null;
 const KINDS={conteneur:"Conteneur",fermee:"Remorque fermée",plateau:"Plateau",stepdeck:"Step deck",fardier:"Fardier"};
 const OPEN_KINDS=["plateau","stepdeck","fardier"];
 const BASE_KIND={c20:"conteneur",c40:"conteneur",c40h:"conteneur",v53:"fermee",fb:"plateau",fb53:"plateau",sd:"stepdeck",sd53:"stepdeck",dd:"fardier",rgn:"fardier"};
-const ROLE_LBL={admin:"Administrateur",planificateur:"Planificateur",chargeur:"Chargeur"};
+const ROLE_LBL={admin:"Administrateur",planificateur:"Planificateur",chargeur:"Chargeur",public:"Visiteur (non connecté)"};
 const STATUS=["brouillon","validé","chargé"];
 const EQ0=JSON.parse(JSON.stringify(EQ));
 const nowIso=()=>new Date().toISOString(),newId=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -374,11 +374,15 @@ function applyCatalog(snap){
  if(curTab==="admin")renderAdmin()}
 
 // ---------- rôles
+// Le planificateur est ouvert à tous. La sauvegarde, les projets et l'Admin demandent une session.
 function applyRole(){const mine=ROLES.find(r=>r.id===myId);
- role=isAdmin?"admin":(mine&&ROLE_LBL[mine.role]?mine.role:(canWrite?"planificateur":"chargeur"));
- $("tabs").hidden=false;$("t-plan").hidden=role==="chargeur";$("t-admin").hidden=role!=="admin";
- $("save").hidden=role==="chargeur";$("new").hidden=role==="chargeur";$("rolelbl").textContent=ROLE_LBL[role];
- if(role==="chargeur"&&(curTab==="plan"||curTab==="admin"))show("proj");else if(role!=="admin"&&curTab==="admin")show("plan");else show(curTab)}
+ role=!logged?"public":(isAdmin?"admin":(mine&&ROLE_LBL[mine.role]?mine.role:(canWrite?"planificateur":"chargeur")));
+ $("tabs").hidden=!logged;$("t-plan").hidden=role==="chargeur";$("t-proj").hidden=!logged;$("t-admin").hidden=role!=="admin";
+ $("save").hidden=!logged||role==="chargeur";$("new").hidden=!logged||role==="chargeur";$("rolelbl").textContent=ROLE_LBL[role];
+ const ab=$("auth");if(ab){ab.hidden=false;ab.textContent=logged?"Se déconnecter":"Se connecter"}
+ if(!logged)show("plan");
+ else if(role==="chargeur"&&(curTab==="plan"||curTab==="admin"))show("proj");
+ else if(role!=="admin"&&curTab==="admin")show("plan");else show(curTab)}
 function show(v){curTab=v;for(const k of["plan","proj","admin","load"])$("v-"+k).hidden=k!==v;
  document.querySelectorAll("#tabs [data-tab]").forEach(b=>b.classList.toggle("pri",b.dataset.tab===(v==="load"?"proj":v)));
  if(v==="proj")renderProj();if(v==="admin")renderAdmin()}
@@ -422,6 +426,8 @@ function renderAdmin(){const el=$("v-admin");
  if(adminTab==="eq")renderEqAdmin();else if(adminTab==="td")renderTdAdmin();else renderUsers()}
 function dimTxt(d){return cv(OPEN_KINDS.includes(d.kind)?(Math.max(...d.zones.map(z=>z.x+z.l))+" mm, "+d.zones.length+" zone"+(d.zones.length>1?"s":"")):[d.l,d.w,d.h].map(v=>cv(v+" mm")).join(" × "))}
 function renderEqAdmin(){const b=$("abody"),docs=(CATDOCS||[]).slice().sort((a,c)=>(a.order||0)-(c.order||0));
+ // Première ouverture : on copie le catalogue de base dans la base, pour que tout soit modifiable et supprimable.
+ if(isAdmin&&!autoSeeded&&CATDOCS&&Object.keys(EQ0).some(k=>!CATDOCS.some(d=>d.id===k))){autoSeeded=true;eqAction("seed");}
  const rows=docs.map(d=>`<tr><td><b>${esc(d.n)}</b></td><td>${KINDS[d.kind]||esc(d.kind)}</td><td>${validDoc(d)?dimTxt(d):"<span class=\"bad\">incomplet</span>"}</td><td>${cv(d.kg+" kg")}</td><td>${cv(d.tareKg+" kg")}</td><td><input type="checkbox" data-en="${esc(d.id)}" ${d.enabled!==false?"checked":""} aria-label="Actif"></td><td style="white-space:nowrap"><button data-ed="${esc(d.id)}">Modifier</button> <button data-eq-del="${esc(d.id)}">${pendDel==="e"+d.id?"Confirmer ?":"Supprimer"}</button></td></tr>`).join("");
  const missing=Object.keys(EQ0).filter(k=>!(CATDOCS||[]).some(d=>d.id===k)).length;
  b.innerHTML=`<div class="card"><h2>Catalogue d’équipements (conteneurs et remorques)</h2>
@@ -457,14 +463,29 @@ async function eqAction(a){
  else if(a==="save"){const d=eqFormToDoc();if(typeof d==="string"){amsg(d);return}
   const id=eqForm.id||newId("e");try{await DB.doc("equipment/"+id).set(clean(d));eqForm=null;amsg("Équipement enregistré.",true);renderEqAdmin()}catch(e){amsg("Refusé : "+(e.message||e.code))}}}
 function renderUsers(){const b=$("abody");
- b.innerHTML=`<div class="card"><h2>Utilisateurs et rôles</h2>
- <p class="mut" style="font-size:13px;margin:0 0 8px">Les propriétaires et éditeurs de la page sont administrateurs. Les autres personnes reçoivent le rôle choisi ici. L’accès à la page lui-même se donne avec le menu Partager (Lecteur, Contributeur, Éditeur).</p>
- <div class="row"><input id="usq" type="text" placeholder="Chercher une personne (nom)…" style="width:260px"><button data-ua="search">Chercher</button></div><div id="usr"></div><div id="ulist"></div></div>`;listUsers()}
-async function listUsers(){const el=$("ulist");if(!el)return;const ids=ROLES.map(r=>r.id);let ps={};try{ps=ids.length?await USR.profiles(ids):{}}catch(e){}
- el.innerHTML=ids.length?`<table class="tbl"><tr><th>Personne</th><th>Rôle</th><th></th></tr>`+ROLES.map(r=>`<tr><td>${esc((ps[r.id]&&ps[r.id].name)||"Utilisateur")}${r.id===myId?" (toi)":""}</td><td><select data-ur="${esc(r.id)}">${["planificateur","chargeur","admin"].map(x=>`<option value="${x}" ${x===r.role?"selected":""}>${ROLE_LBL[x]}</option>`).join("")}</select></td><td><button data-urm="${esc(r.id)}">Retirer</button></td></tr>`).join("")+"</table>":`<p class="mut">Aucun rôle attribué. Sans rôle, une personne qui peut modifier la page est planificateur, les autres sont chargeurs.</p>`}
-async function userSearch(){const q=($("usq").value||"").trim(),el=$("usr");if(!q){el.innerHTML="";return}
- try{const hits=await USR.search(q);el.innerHTML=hits.length?`<div class="row">`+hits.filter(h=>!ROLES.some(r=>r.id===h.id)).slice(0,8).map(h=>`<button data-uadd="${esc(h.id)}">+ ${esc(h.name||"Sans nom")}</button>`).join("")+`</div>`:`<p class="mut">Aucun résultat.</p>`}catch(e){el.innerHTML=`<p class="bad">Recherche indisponible.</p>`}}
-
+ b.innerHTML=`<div class="card"><h2>Utilisateurs</h2>
+ <p class="mut" style="font-size:13px;margin:0 0 8px">Le planificateur est ouvert à tous, sans mot de passe. Un compte donne accès aux projets et à la sauvegarde ; le rôle administrateur donne en plus cet onglet.</p>
+ <div class="row"><label class="fl">Nom d’utilisateur<input id="unm" type="text" autocomplete="off" style="width:200px"></label>
+ <label class="fl">Mot de passe<input id="upw" type="password" autocomplete="new-password" style="width:200px"></label>
+ <label class="fl">Rôle<select id="urole">${["planificateur","chargeur","admin"].map(x=>`<option value="${x}">${ROLE_LBL[x]}</option>`).join("")}</select></label>
+ <button class="pri" data-ua="add">Créer le compte</button></div>
+ <small>Mot de passe : 8 caractères minimum. Nom sans accent ni espace de préférence.</small>
+ <div id="ulist" style="margin-top:12px"></div></div>`;listUsers()}
+async function listUsers(){const el=$("ulist");if(!el)return;
+ let us=[];try{us=await USR.users.list()}catch(e){el.innerHTML=`<p class="bad">Liste indisponible : ${esc(e.message||e)}</p>`;return}
+ const roleOf=id=>{const m=ROLES.find(x=>x.id===id);return m&&ROLE_LBL[m.role]?m.role:"planificateur"};
+ el.innerHTML=`<table class="tbl"><tr><th>Utilisateur</th><th>Rôle</th><th></th></tr>`+us.map(u=>{
+  const r=u.admin?"admin":roleOf(u.id);
+  return `<tr><td><b>${esc(u.name)}</b>${u.id===myId?' <span class="mut">(toi)</span>':""}</td>`+
+   `<td><select data-ur="${esc(u.id)}">${["planificateur","chargeur","admin"].map(x=>`<option value="${x}" ${x===r?"selected":""}>${ROLE_LBL[x]}</option>`).join("")}</select></td>`+
+   `<td style="white-space:nowrap"><button data-upw="${esc(u.id)}">Mot de passe</button> <button data-udel="${esc(u.id)}" ${u.id===myId?"disabled":""}>${pendDel==="u"+u.id?"Confirmer ?":"Supprimer"}</button></td></tr>`}).join("")+`</table>`}
+async function userAdd(){const n=($("unm").value||"").trim(),pw=$("upw").value||"",r=$("urole").value;
+ if(!n){amsg("Le nom d’utilisateur est obligatoire.");return}
+ if(pw.length<8){amsg("Mot de passe : 8 caractères minimum.");return}
+ try{const u=await USR.users.add(n,pw,r==="admin");
+  if(r!=="admin")await DB.doc("roles/"+u.id).set({role:r,addedAt:nowIso()});
+  $("unm").value="";$("upw").value="";amsg("Compte créé : "+n,true);listUsers()}
+ catch(x){amsg("Refusé : "+(x.message||x.code))}}
 
 // ---------- catalogue d'attaches (sangles, chaînes) : capacité de travail (WLL) lue sur l'étiquette
 let tdForm=null;
@@ -494,6 +515,8 @@ async function tdAction(a){
 // ---------- événements
 function wireAdmin(){
  document.querySelectorAll("#tabs [data-tab]").forEach(b=>b.onclick=()=>show(b.dataset.tab));
+ const ab=$("auth");if(ab)ab.onclick=async()=>{if(!logged){location.href="/login";return}
+  try{await USR.logout()}catch(e){}location.href="/"};
  $("save").onclick=saveProject;$("lback").onclick=()=>show("proj");$("lpdf").onclick=async()=>{if(loaderP&&window.jspdf)await saveFile(fname(loaderP,"pdf"),buildPDF(loaderP).output("blob"))};
  $("v-proj").onclick=e=>{const b=e.target.closest("[data-act]");if(b)projAction(b.dataset.act,b.dataset.id)};
  $("v-proj").onchange=async e=>{const id=e.target.dataset&&e.target.dataset.st;if(!id)return;try{await DB.doc("projects/"+id).update({status:e.target.value,updatedAt:nowIso(),updatedBy:myId})}catch(x){alert0("Refusé : "+(x.message||x.code))}};
@@ -507,26 +530,32 @@ function wireAdmin(){
   if(d.eqDel){const id=d.eqDel,used=PROJ.filter(p=>p.eqId===id).length;if(used){amsg("Utilisé par "+used+" projet(s) : désactive-le plutôt (case Actif).");return}
    if(pendDel!=="e"+id){pendDel="e"+id;renderEqAdmin();return}pendDel=null;try{await DB.doc("equipment/"+id).delete();amsg("Équipement supprimé.",true)}catch(x){amsg("Refusé : "+(x.message||x.code))}return}
   if(d.zdel!==undefined&&eqForm){eqForm.zones.splice(+d.zdel,1);renderEqAdmin();return}
-  if(d.ua==="search"){userSearch();return}
-  if(d.uadd){try{await DB.doc("roles/"+d.uadd).set({role:"planificateur",addedAt:nowIso()});$("usr").innerHTML="";}catch(x){amsg("Refusé : "+(x.message||x.code))}return}
-  if(d.urm){try{await DB.doc("roles/"+d.urm).delete()}catch(x){amsg("Refusé : "+(x.message||x.code))}return}};
+  if(d.ua==="add"){userAdd();return}
+  if(d.upw){const pw=prompt("Nouveau mot de passe (8 caractères minimum) :");if(!pw)return;
+   try{await USR.users.passwd(d.upw,pw);amsg("Mot de passe changé.",true)}catch(x){amsg("Refusé : "+(x.message||x.code))}return}
+  if(d.udel){const id=d.udel;if(pendDel!=="u"+id){pendDel="u"+id;listUsers();return}pendDel=null;
+   try{await USR.users.remove(id);amsg("Compte supprimé.",true)}catch(x){amsg("Refusé : "+(x.message||x.code))}listUsers();return}};
  $("v-admin").onchange=async e=>{const t=e.target,d=t.dataset;
   if(d.ten){try{await DB.doc("tiedowns/"+d.ten).update({enabled:t.checked})}catch(x){amsg("Refusé : "+(x.message||x.code));t.checked=!t.checked}return}
   if(d.tf&&tdForm){tdForm[d.tf]=d.tf==="wll"?pu(+t.value,"kg"):t.value;return}
  if(d.en){try{await DB.doc("equipment/"+d.en).update({enabled:t.checked})}catch(x){amsg("Refusé : "+(x.message||x.code));t.checked=!t.checked}return}
-  if(d.ur){try{await DB.doc("roles/"+d.ur).set({role:t.value,addedAt:nowIso()})}catch(x){amsg("Refusé : "+(x.message||x.code))}return}
+  if(d.ur){const v=t.value;
+   try{await USR.users.setAdmin(d.ur,v==="admin");
+    if(v!=="admin")await DB.doc("roles/"+d.ur).set({role:v,addedAt:nowIso()});
+    amsg("Rôle mis à jour.",true)}catch(x){amsg("Refusé : "+(x.message||x.code))}listUsers();return}
   if(!eqForm)return;
   if(d.ef){const k=d.ef;eqForm[k]=t.type==="checkbox"?t.checked:t.type==="number"?pu(+t.value,d.ut):t.value;if(k==="hb"){if(t.checked&&!eqForm.hbH)eqForm.hbH=1220;renderEqAdmin();return}if(k==="kind"){const o=OPEN_KINDS.includes(t.value);if(o&&!eqForm.zones)eqForm.zones=[{name:"Plancher",x:0,z:1500,l:14630,w:2600}];renderEqAdmin()}return}
   if(d.ez!==undefined){const z=eqForm.zones[+d.ez];z[d.f]=d.f==="name"?t.value:pu(+t.value,"len")}};
- $("v-admin").onkeydown=e=>{if(e.key==="Enter"&&e.target.id==="usq")userSearch()}}
+ $("v-admin").onkeydown=e=>{if(e.key==="Enter"&&(e.target.id==="unm"||e.target.id==="upw"))userAdd()}}
 async function initDb(){try{const c=window.claude;if(!c||!c.use)return;
  const [d,u]=await Promise.all([c.use("db"),c.use("user")]);if(!d||!u)return;DB=d;USR=u;
- myId=await u.id();isAdmin=await u.canEdit();const w=await u.can("data.write");canWrite=w!==false;
+ myId=await u.id();isAdmin=await u.canEdit();logged=u.logged?!!(await u.logged()):true;const w=await u.can("data.write");canWrite=w!==false;
  wireAdmin();
  DB.collection("equipment").onSnapshot(applyCatalog,()=>{});
  DB.collection("tiedowns").onSnapshot(applyTiedowns,()=>{});
- DB.collection("roles").onSnapshot(s=>{ROLES=s.docs.map(x=>({id:x.id,...x.data()}));applyRole();if(curTab==="admin"&&adminTab==="users")listUsers()},()=>{});
- DB.collection("projects").orderBy("updatedAt","desc").limit(300).onSnapshot(s=>{PROJ=s.docs.map(x=>({id:x.id,...x.data()}));if(curTab==="proj")renderProj()},()=>{});
+ if(logged){
+  DB.collection("roles").onSnapshot(s=>{ROLES=s.docs.map(x=>({id:x.id,...x.data()}));applyRole();if(curTab==="admin"&&adminTab==="users")listUsers()},()=>{});
+  DB.collection("projects").orderBy("updatedAt","desc").limit(300).onSnapshot(s=>{PROJ=s.docs.map(x=>({id:x.id,...x.data()}));if(curTab==="proj")renderProj()},()=>{});}
  applyRole()}catch(e){}}
 initDb();
 

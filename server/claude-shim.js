@@ -2,7 +2,7 @@
 (() => {
   const api = async (url, opt = {}) => {
     const r = await fetch(url, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, ...opt });
-    if (r.status === 401) { location.href = '/login'; throw new Error('Non connecté'); }
+    if (r.status === 401) throw new Error('Non connecté');   // le planificateur est public : pas de redirection
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.error || r.status);
     return j;
@@ -45,9 +45,20 @@
   const who = async () => me || (me = await api('/api/me'));
   const user = {
     isOwner: async () => !!(await who()).admin, canEdit: async () => !!(await who()).admin, can: async () => true,
-    id: async () => (await who()).id,
+    id: async () => (await who()).id || null,
+    logged: async () => !(await who()).anon,
+    name: async () => (await who()).name || '',
     profiles: async (ids) => api('/api/users/profiles?ids=' + q(ids.join(','))),
     search: async (s) => api('/api/users/search?q=' + q(s)),
+    logout: () => api('/api/logout', { method: 'POST' }),
+    // gestion des comptes (administrateurs seulement)
+    users: {
+      list: () => api('/api/users'),
+      add: (name, password, admin) => api('/api/users', { method: 'POST', body: JSON.stringify({ name, password, admin: !!admin }) }),
+      passwd: (id, password) => api('/api/users', { method: 'PATCH', body: JSON.stringify({ id, password }) }),
+      setAdmin: (id, admin) => api('/api/users', { method: 'PATCH', body: JSON.stringify({ id, admin: !!admin }) }),
+      remove: (id) => api('/api/users?id=' + q(id), { method: 'DELETE' }),
+    },
   };
   window.claude = { use: async (n) => (n === 'db' ? { doc: docRef, collection: (p) => colRef(p) } : n === 'user' ? user : null) };
 })();

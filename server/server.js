@@ -11,6 +11,8 @@ const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || path.join(ROOT, '..', 'data');
 const PAGE = process.env.PAGE_FILE || path.join(ROOT, '..', 'dist', 'planificateur.html');
 const ADMIN_ONLY = new Set(['equipment', 'roles', 'tiedowns']); // collections modifiables par les administrateurs seulement
+const PUBLIC_READ = new Set(['equipment', 'tiedowns']);             // lisibles sans être connecté (le planificateur est public)
+const MIN_PASS = 8;
 fs.mkdirSync(DATA, { recursive: true });
 
 // ---------- stockage (fichiers JSON, écriture atomique)
@@ -75,14 +77,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/logout' && req.method === 'POST') { res.setHeader('Set-Cookie', 'sid=; Path=/; Max-Age=0'); return json(res, 200, { ok: true }); }
 
-    if (!me) { if (p.startsWith('/api/')) return json(res, 401, { error: 'Non connecté' }); res.writeHead(302, { Location: '/login' }); return res.end(); }
-
+    // Le planificateur est public : la page, les catalogues et le flux d'événements n'exigent pas de session.
     if (p === '/' || p === '/index.html') {
       const html = fs.readFileSync(PAGE, 'utf8').replace('<head>', '<head><script src="/claude-shim.js"></script>');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); return res.end(html);
     }
     if (p === '/claude-shim.js') { res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8' }); return res.end(shim); }
-    if (p === '/api/me') return json(res, 200, { id: me.id, name: me.name, admin: !!me.admin });
+    if (p === '/api/me') return json(res, 200, me ? { id: me.id, name: me.name, admin: !!me.admin } : { anon: true });
     if (p === '/api/events') {
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       res.write(': ok\n\n'); clients.add(res);
@@ -90,11 +91,52 @@ const server = http.createServer(async (req, res) => {
       req.on('close', () => { clearInterval(ka); clients.delete(res); });
       return;
     }
+    // ---------- gestion des utilisateurs (administrateurs seulement)
+    if (p === '/api/users') {
+      if (!me || !me.admin) return json(res, 403, { error: 'Réservé aux administrateurs' });
+      users = readJson('users.json', users);
+      if (req.method === 'GET') return json(res, 200, users.map((u) => ({ id: u.id, name: u.name, admin: !!u.admin })));
+      if (req.method === 'DELETE') {
+        const id = url.searchParams.get('id') || '';
+        if (id === me.id) return json(res, 400, { error: 'Impossible de supprimer ton propre compte.' });
+        if (!users.some((u) => u.id === id)) return json(res, 404, { error: 'Utilisateur introuvable.' });
+        users = users.filter((u) => u.id !== id);
+        writeJson('users.json', users);
+        delete store['roles/' + id]; saveStore(); emit('roles');
+        return json(res, 200, { ok: true });
+      }
+      if (req.method !== 'POST' && req.method !== 'PATCH') return json(res, 405, { error: 'méthode' });
+      const b = await body(req);
+      if (req.method === 'POST') {
+        const name = String(b.name || '').trim(), pw = String(b.password || '');
+        if (!/^[\w .@-]{2,40}$/.test(name)) return json(res, 400, { error: 'Nom invalide : 2 à 40 caractères, sans accents ni symboles.' });
+        if (pw.length < MIN_PASS) return json(res, 400, { error: `Mot de passe : ${MIN_PASS} caractères minimum.` });
+        if (users.some((u) => u.name.toLowerCase() === name.toLowerCase())) return json(res, 409, { error: 'Ce nom existe déjà.' });
+        const u = { id: 'u' + crypto.randomBytes(5).toString('hex'), name, pass: hashPass(pw), admin: !!b.admin };
+        users.push(u); writeJson('users.json', users);
+        return json(res, 200, { id: u.id, name: u.name, admin: u.admin });
+      }
+      const u = users.find((x) => x.id === b.id);
+      if (!u) return json(res, 404, { error: 'Utilisateur introuvable.' });
+      if (b.password !== undefined) {
+        if (String(b.password).length < MIN_PASS) return json(res, 400, { error: `Mot de passe : ${MIN_PASS} caractères minimum.` });
+        u.pass = hashPass(String(b.password));
+      }
+      if (b.admin !== undefined && !!b.admin !== !!u.admin) {
+        if (!b.admin && u.id === me.id) return json(res, 400, { error: 'Impossible de retirer ton propre rôle d’administrateur.' });
+        if (!b.admin && users.filter((x) => x.admin).length <= 1) return json(res, 400, { error: 'Il doit rester au moins un administrateur.' });
+        u.admin = !!b.admin;
+      }
+      writeJson('users.json', users);
+      return json(res, 200, { ok: true });
+    }
+    if (!me && p.startsWith('/api/users')) return json(res, 401, { error: 'Non connecté' });
     if (p === '/api/users/search') { const q = (url.searchParams.get('q') || '').toLowerCase(); return json(res, 200, users.filter((u) => u.name.toLowerCase().includes(q)).slice(0, 20).map((u) => ({ id: u.id, name: u.name }))); }
     if (p === '/api/users/profiles') { const ids = (url.searchParams.get('ids') || '').split(','); const o = {}; for (const u of users) if (ids.includes(u.id)) o[u.id] = { id: u.id, name: u.name }; return json(res, 200, o); }
 
     if (p === '/api/col' && req.method === 'GET') {
       const c = url.searchParams.get('path') || ''; if (!COL.test(c)) return json(res, 400, { error: 'chemin invalide' });
+      if (!me && !PUBLIC_READ.has(c)) return json(res, 401, { error: 'Non connecté' });
       let docs = Object.keys(store).filter((k) => k.startsWith(c + '/')).map((k) => ({ id: k.slice(c.length + 1), data: store[k] }));
       const ord = url.searchParams.get('order'), lim = +url.searchParams.get('limit') || 0;
       if (ord) docs.sort((a, b) => String(b.data[ord] ?? '').localeCompare(String(a.data[ord] ?? '')));
@@ -104,7 +146,11 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/doc') {
       const k = url.searchParams.get('path') || ''; if (!DOC.test(k)) return json(res, 400, { error: 'chemin invalide' });
       const c = k.split('/')[0];
-      if (req.method === 'GET') return json(res, 200, store[k] === undefined ? { exists: false } : { exists: true, data: store[k] });
+      if (req.method === 'GET') {
+        if (!me && !PUBLIC_READ.has(c)) return json(res, 401, { error: 'Non connecté' });
+        return json(res, 200, store[k] === undefined ? { exists: false } : { exists: true, data: store[k] });
+      }
+      if (!me) return json(res, 401, { error: 'Non connecté' });
       if (ADMIN_ONLY.has(c) && !me.admin) return json(res, 403, { error: 'Réservé aux administrateurs' });
       if (req.method === 'PUT' || req.method === 'PATCH') {
         const b = await body(req); if (!b || typeof b !== 'object' || Array.isArray(b)) return json(res, 400, { error: 'document invalide' });
@@ -113,6 +159,7 @@ const server = http.createServer(async (req, res) => {
       else return json(res, 405, { error: 'méthode' });
       saveStore(); emit(c); return json(res, 200, { ok: true });
     }
+    if (!me && p.startsWith('/api/')) return json(res, 401, { error: 'Non connecté' });
     json(res, 404, { error: 'introuvable' });
   } catch (e) { json(res, 500, { error: String(e.message || e) }); }
 });
