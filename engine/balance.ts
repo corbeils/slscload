@@ -20,6 +20,7 @@ export type Ctx = {
   reg: RegCtx;               // saison, pneus, PNBE de la direction
   L: number;                 // longueur de la remorque (du nez à l'arrière)
   slide: [number, number];   // plage de position du 1er essieu du groupe arrière
+  single?: boolean;          // « Étendre le voyage » : pièces à la queue leu leu
   override?: boolean;        // true : aucune pièce refusée, celles qui dépassent sont posées hors de la remorque
 };
 
@@ -175,13 +176,14 @@ const SORTS = ['area', 'kgdesc', 'kgasc'] as const;
 // Boîte fermée : conteneur, remorque fermée. `items` = pièces à placer (non verrouillées), `locked` = déjà placées à la main.
 export function balanceClosed(space: Space, items: Item[], locked: Placed[], ctx: Ctx) {
   let best: Best | null = null;
-  for (const sort of SORTS) {
-    const packed = pack(space, items, { sort, fixed: locked });
+  // En file : les pièces gardent leur sens ; on ne les pivote que si cela en place davantage.
+  for (const shortFirst of ctx.single ? [false, true] : [false]) for (const sort of SORTS) {
+    const packed = pack(space, items, { sort, fixed: locked, single: ctx.single, shortFirst });
     const base = ctx.override ? spill(packed, { l: space.l, w: space.w, h: space.h, x0: space.l, z: 0 }) : packed;
     for (const front of slides(ctx)) {
       const r = shiftOptimize(base.placed, [{ x: 0, l: space.l }], (p) => score(p, ctx, front), () => 0);
       const pen = r.score + base.rejected.length * 1e8; // d'abord placer le plus de pièces
-      if (!best || pen < best.pen) best = { pen, placed: r.placed, rejected: base.rejected, front };
+      if (!best || (shortFirst ? Math.floor(pen) < Math.floor(best.pen) : pen < best.pen)) best = { pen, placed: r.placed, rejected: base.rejected, front };
     }
   }
   const b = best as Best;
@@ -196,10 +198,10 @@ export function balanceOpen(sp: OpenSpace, items: Item[], locked: Placed[], ctx:
   let best: Best | null = null;
   // Plancher d'abord (charge étalée, rien d'empilé tant qu'il reste du plancher). L'empilage serré n'est retenu
   // que s'il place plus de pièces ou réduit un dépassement réglementaire.
-  for (const floorFirst of [true, false]) {
+  for (const shortFirst of ctx.single ? [false, true] : [false]) for (const floorFirst of [true, false]) {
     let cand: Best | null = null;
     for (const zoneOrder of (sp.zones.length > 1 ? ['low', 'front'] : ['low']) as ('low' | 'front')[]) for (const sort of SORTS) {
-      const packed = packOpen(sp, items, { sort, fixed: locked, floorFirst, zoneOrder });
+      const packed = packOpen(sp, items, { sort, fixed: locked, floorFirst, zoneOrder, single: ctx.single, shortFirst });
       const base = ctx.override ? spill(packed, spillDims(sp)) : packed;
       for (const front of slides(ctx)) {
         const r = shiftOptimize(base.placed, zones, (p) => score(p, ctx, front), floor);

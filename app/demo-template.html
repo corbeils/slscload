@@ -35,6 +35,7 @@ small,.mut{color:var(--mut)}
 </div>
 <div class="row">
 <label class="mut"><input type="checkbox" id="auto" checked>Équilibrage auto</label>
+<label class="mut" title="Place les caisses une derrière l’autre sur la longueur, sans rien côte à côte ni empilé"><input type="checkbox" id="single">ÉTENDRE LE VOYAGE</label>
 <select id="tdn" aria-label="Attache utilisée" title="Attache utilisée pour calculer l’arrimage"></select>
 <button id="ovr" aria-pressed="false" title="Permet de placer des caisses qui dépassent le poids ou les dimensions, avec un avis en rouge">OVERRIDE WEIGHT AND DIMS : OFF</button>
 </div>
@@ -160,7 +161,7 @@ const s=EQ[cur];
  const keep=clear||!res?[]:res.placed.filter(p=>p.locked&&items.some(i=>i.id===p.id&&sig(i)===lockSig[p.id]));
  const free=items.filter(i=>!keep.some(k=>k.id===i.id));
  if($("auto").checked){res={placed:keep,rejected:free.map(item=>({item,reason:"Aucune position valide"})),flags:[]};balance()}
- else{const o={fixed:keep},r=s.open?(ovr?Engine.packOpenAny:Engine.packOpen)(openSp(s),free,o):(ovr?Engine.packAny:Engine.pack)(closedSp(s),free,o);res={placed:r.placed,rejected:r.rejected,flags:r.flags||[]};build();ax()}}
+ else{const o={fixed:keep,single:$("single").checked},r=s.open?(ovr?Engine.packOpenAny:Engine.packOpen)(openSp(s),free,o):(ovr?Engine.packAny:Engine.pack)(closedSp(s),free,o);res={placed:r.placed,rejected:r.rejected,flags:r.flags||[]};build();ax()}}
 {const o=document.createElement("option");o.value="";o.textContent="Choisir un équipement…";$("eq").appendChild(o)}
 {const o=document.createElement("option");o.value="";o.textContent="Type d’essieux de la remorque…";$("cfg").appendChild(o)}
 for(const k in EQ){const o=document.createElement("option");o.value=k;o.textContent=EQ[k].n;$("eq").appendChild(o)}
@@ -173,7 +174,7 @@ function mesh(x,y,z,l,w,h,mat,edge){const g=new THREE.BoxGeometry(l/1e3,h/1e3,w/
  const e=new THREE.LineSegments(new THREE.EdgesGeometry(g),new THREE.LineBasicMaterial({color:edge,transparent:true,opacity:.5}));m.add(e);return m}
 const cfgNow=()=>CFG[$("cfg").value],liftNow=()=>{const c=cfgNow();return $("lift").checked&&!!(c&&c.selfSteer)};
 const ready=()=>!!(cur&&EQ[cur]&&CFG[$("cfg").value]);
-function ctx(slide){const s=EQ[cur],c={base:{...s.rig,...TR},cfg:cfgNow(),lifted:liftNow(),reg:{season:$("season").value||"normal",tires:$("tires").value||"dual",steerRated:STEER_RATED},L:dims(s).l,override:ovr};c.slide=slide||[+$("sl").min,+$("sl").max];return c}
+function ctx(slide){const s=EQ[cur],c={base:{...s.rig,...TR},cfg:cfgNow(),lifted:liftNow(),reg:{season:$("season").value||"normal",tires:$("tires").value||"dual",steerRated:STEER_RATED},L:dims(s).l,override:ovr,single:$("single").checked};c.slide=slide||[+$("sl").min,+$("sl").max];return c}
 function setRange(keep){if(!ready())return;const c=cfgNow(),r=Engine.slideRange(ctx([0,0])),lo=r[0],hi=r[1],v=keep?+$("sl").value:Math.round((lo+hi)/2);
  $("sl").min=lo;$("sl").max=hi;$("sl").value=Math.min(hi,Math.max(lo,v));$("lift").disabled=!c.selfSteer;if(!c.selfSteer)$("lift").checked=false}
 function build(){syncOvr();while(grp.children.length)grp.remove(grp.children[0]);if(!ready()){meshes=[];draw();return}const s=EQ[cur],D=dims(s);
@@ -584,7 +585,7 @@ view.onpointerup=()=>{const m=drag&&drag.moved;drag=null;dr=null;view.style.curs
 view.onpointermove=e=>{
  if(drag){const pt=planePoint(e,drag.p);if(pt)tryMove(drag.p,snap(pt.x-drag.ox),snap(pt.y-drag.oy));return}
  if(!dr)return;ry+=(e.clientX-dr[0])*.008;rx=Math.max(-.2,Math.min(1.2,rx+(e.clientY-dr[1])*.008));dr=[e.clientX,e.clientY];draw()};
-$("eq").onchange=()=>{dirty=true;setEq()};$("cfg").onchange=reflow;$("lift").onchange=reflow;$("season").onchange=reflow;$("tires").onchange=reflow;
+$("eq").onchange=()=>{dirty=true;setEq()};$("single").onchange=()=>relayout();$("cfg").onchange=reflow;$("lift").onchange=reflow;$("season").onchange=reflow;$("tires").onchange=reflow;
 
 function initTheme(){const b=$("thm"),de=document.documentElement;if(!b||!de||!de.setAttribute)return;let m="auto";try{m=localStorage.getItem("thm")||"dark"}catch(e){}const L={auto:"auto",light:"clair",dark:"sombre"},ap=()=>{if(m==="auto")de.removeAttribute("data-theme");else de.setAttribute("data-theme",m);b.textContent="Thème : "+L[m];b.setAttribute("aria-label","Changer le thème (auto, clair, sombre)")};ap();b.onclick=()=>{m=m==="auto"?"light":m==="light"?"dark":"auto";try{localStorage.setItem("thm",m)}catch(e){}ap()}}
 initTheme();

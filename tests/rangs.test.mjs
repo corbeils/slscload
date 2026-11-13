@@ -60,3 +60,18 @@ const rows = E.evaluate(b.placed, ctx, b.front).rows;
 assert.ok(rows.every((x) => x.ok));
 assert.ok(rows[2].kg / rows[2].limit < 0.9, 'essieux de la remorque sous 90 %');
 console.log('OK : arrimage par rang et étalement.');
+
+// « Étendre le voyage » : pièces à la queue leu leu (aucune côte à côte, aucune empilée), plan toujours conforme
+{
+  const one = E.balanceOpen(sp, items, [], { ...ctx, single: true });
+  const ps = one.placed;
+  assert.ok(ps.length >= 6, 'la plupart des pièces tiennent en file');
+  assert.ok(ps.every((p) => p.z === sp.zones[p.zi].z), 'rien d’empilé');
+  for (const a of ps) for (const b of ps) if (a !== b) assert.ok(a.x + a.pl <= b.x || b.x + b.pl <= a.x, `${a.id} et ${b.id} côte à côte`);
+  assert.equal(ps.length + one.rejected.length, items.length);
+  // boîte fermée
+  const box = E.balanceClosed({ l: 16000, w: 2480, h: 2700, maxKg: 20000 }, items.slice(1), [], { ...ctx, L: 16000, single: true });
+  for (const a of box.placed) for (const b of box.placed) if (a !== b) assert.ok(a.x + a.pl <= b.x || b.x + b.pl <= a.x);
+  assert.ok(box.placed.every((p) => p.z === 0));
+  console.log('OK : étendre le voyage (' + ps.length + ' placées, ' + one.rejected.length + ' sans place).');
+}

@@ -29,7 +29,7 @@ export function packOpen(sp: OpenSpace, items: Item[], opts: PackOpts = {}) {
 
     const fixedKgZ = fixedZ.reduce((s, f) => s + f.kg, 0);
     const fixedLocal = fixedZ.map((f) => ({ ...f, x: f.x - z.x, y: f.y + shift, z: f.z - z.z }));
-    const r = pack({ l: z.l, w, h, maxKg: kgLeft + fixedKgZ }, left, { sort: opts.sort, fixed: fixedLocal, floorFirst: opts.floorFirst });
+    const r = pack({ l: z.l, w, h, maxKg: kgLeft + fixedKgZ }, left, { sort: opts.sort, fixed: fixedLocal, floorFirst: opts.floorFirst, single: opts.single, shortFirst: opts.shortFirst });
 
     // Décalage uniforme : garde les pièces sans chevauchement. Si la zone a été élargie, celles du bord débordent.
     for (const p of r.placed) placed.push({ ...p, x: p.x + z.x, y: p.y - shift, z: p.z + z.z, seq: placed.length + 1, zi: z.i });
@@ -47,7 +47,7 @@ export function packOpen(sp: OpenSpace, items: Item[], opts: PackOpts = {}) {
 
   const rejected = left.map((item) => ({
     item,
-    reason: item.kg > kgLeft ? 'Charge utile dépassée' : 'Aucune position valide',
+    reason: item.kg > kgLeft ? 'Charge utile dépassée' : opts.single ? 'Plus de place à la queue leu leu' : 'Aucune position valide',
   }));
 
   return { placed, rejected, cargoKg: placed.reduce((s, p) => s + p.kg, 0), flags: openFlags(placed, sp) };

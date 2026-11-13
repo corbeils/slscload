@@ -13,6 +13,8 @@ export type PackOpts = {
   sort?: 'area' | 'kgdesc' | 'kgasc'; // critère secondaire (l'arrêt reste prioritaire)
   fixed?: Placed[];                    // pièces verrouillées, en coordonnées locales de l'espace
   zoneOrder?: 'low' | 'front';         // plateaux à plusieurs niveaux : remplir le niveau le plus bas d'abord, ou de l'avant vers l'arrière
+  single?: boolean;                    // à la queue leu leu : une pièce derrière l'autre, rien côte à côte ni empilé
+  shortFirst?: boolean;                // en file : essaie d'abord le petit côté dans le sens de la longueur (pièces pivotables)
   floorFirst?: boolean;                // plancher d'abord : on n'empile que s'il ne reste plus de place au plancher
 };
 
@@ -96,16 +98,18 @@ export function pack(space: Space, items: Item[], opts: PackOpts = {}) {
   const placed: Placed[] = [...fixed];
   const rejected: { item: Item; reason: string }[] = [];
   const eps: [number, number, number][] = [[0, 0, 0]];
-  for (const f of fixed) eps.push([f.x + f.pl, f.y, f.z], [f.x, f.y + f.pw, f.z], [f.x, f.y, f.z + f.h]);
+  for (const f of fixed) { if (opts.single) eps.push([f.x + f.pl, 0, 0]); else eps.push([f.x + f.pl, f.y, f.z], [f.x, f.y + f.pw, f.z], [f.x, f.y, f.z + f.h]); }
   let kg = fixed.reduce((s, f) => s + f.kg, 0);
 
   for (const it of order) {
     if (kg + it.kg > space.maxKg) { rejected.push({ item: it, reason: 'Charge utile dépassée' }); continue; }
     const rots: [number, number][] = it.rotate && it.l !== it.w ? [[it.l, it.w], [it.w, it.l]] : [[it.l, it.w]];
 
+    if (opts.single && opts.shortFirst) rots.sort((a, b) => a[0] - b[0]);
     const fits = (p: number[], pl: number, pw: number) => {
       const [x, y, z] = p;
       if (x + pl > space.l || y + pw > space.w || z + it.h > space.h) return false;
+      if (opts.single) return z === 0 && !placed.some((b) => ov(x, x + pl, b.x, b.x + b.pl) > 0);
       let support = 0;
       for (const b of placed) {
         const o = ov(x, x + pl, b.x, b.x + b.pl) * ov(y, y + pw, b.y, b.y + b.pw);
@@ -120,11 +124,12 @@ export function pack(space: Space, items: Item[], opts: PackOpts = {}) {
     let hit: { p: number[]; pl: number; pw: number } | null = null;
     outer: for (const p of eps) for (const [pl, pw] of rots) if (fits(p, pl, pw)) { hit = { p, pl, pw }; break outer; }
 
-    if (!hit) { rejected.push({ item: it, reason: 'Aucune position valide' }); continue; }
+    if (!hit) { rejected.push({ item: it, reason: opts.single ? 'Plus de place à la queue leu leu' : 'Aucune position valide' }); continue; }
     const [x, y, z] = hit.p;
     placed.push({ ...it, x, y, z, pl: hit.pl, pw: hit.pw, seq: placed.length + 1 });
     kg += it.kg;
-    eps.push([x + hit.pl, y, z], [x, y + hit.pw, z], [x, y, z + it.h]);
+    if (opts.single) eps.push([x + hit.pl, 0, 0]);
+    else eps.push([x + hit.pl, y, z], [x, y + hit.pw, z], [x, y, z + it.h]);
   }
   return { placed, rejected, cargoKg: kg };
 }
