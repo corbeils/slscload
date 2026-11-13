@@ -89,7 +89,7 @@ function buildPDF(P){
   const z=P.eq.zones[p.zi]||P.eq.zones[0],pos=(P.eq.open?z.name+", ":"")+cv(mm(p.x)+" m")+" du nez"+(p.z-z.z>5?", empilée":"")+(p.locked?", fixée":"");
   doc.setFontSize(8);doc.text(String(i+1),M,y);doc.setFont("helvetica","bold");doc.text(p.id,M+9,y);doc.setFont("helvetica","normal");
   doc.text(doc.splitTextToSize(p.name,40)[0],M+34,y);doc.setFillColor(...rgb[p.stop]);doc.rect(M+78,y-2.6,3,3,"F");doc.text(String(p.stop),M+83,y);
-  doc.text(fl(p.pl)+" × "+fl(p.pw)+" × "+fl(p.h),M+92,y);doc.text(IM?String(Math.round(p.kg*IMP_K)):String(p.kg),M+146,y,{align:"right"});doc.text(doc.splitTextToSize(pos,PW-M-14-8-(M+148))[0],M+148,y);const sq=(P.sec||[]).find(q=>q.id===p.id);if(sq){doc.setFont("helvetica","bold");doc.text(String(sq.n)+(sq.type==="machine"?" M":""),PW-M-17,y,{align:"right"});doc.setFont("helvetica","normal")}
+  doc.text(fl(p.pl)+" × "+fl(p.pw)+" × "+fl(p.h),M+92,y);doc.text(IM?String(Math.round(p.kg*IMP_K)):String(p.kg),M+146,y,{align:"right"});doc.text(doc.splitTextToSize(pos,PW-M-14-8-(M+148))[0],M+148,y);const sq=(P.sec||[]).find(q=>(q.ids||[q.id]).includes(p.id));if(sq){const fst=(sq.ids||[sq.id])[0]===p.id;doc.setFont("helvetica",fst?"bold":"normal");doc.text(fst?String(sq.n)+(sq.type==="machine"?" M":""):"idem",PW-M-17,y,{align:"right"});doc.setFont("helvetica","normal")}
   doc.setDrawColor(0);doc.setLineWidth(.2);doc.rect(PW-M-7,y-3,3.6,3.6,"S");
   doc.setDrawColor(225);doc.line(M,y+1.6,PW-M,y+1.6);y+=5.2});
  y+=3;

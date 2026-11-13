@@ -63,7 +63,9 @@ export function score(placed: Placed[], ctx: Ctx, front: number) {
   }
   if (e.gross.kg > e.gross.limit) s += (e.gross.kg - e.gross.limit) * 1000;
   s += e.checks.filter((c) => c.severity === 'error').length * 1e5;
-  return s + mx;
+  // À conformité égale : plus faible utilisation maximale, puis poids réparti entre les essieux moteurs et ceux de la remorque.
+  const u = (r: { kg: number; limit: number }) => r.kg / Math.max(1, r.limit);
+  return s + Math.min(0.999, (mx + 0.5 * Math.abs(u(e.rows[1]) - u(e.rows[2]))) / 2);
 }
 
 // Plage de position du 1er essieu : empattement de la semi ≤ max, porte-à-faux ≤ 35 %, essieux dans la remorque.
@@ -163,7 +165,8 @@ export function spreadSmall(
   const s1 = score(placed, ctx, front);
   let bf = front, bs = Infinity;
   for (const f of slides(ctx)) { const s = score(cur, ctx, f); if (s < bs) { bs = s; bf = f; } }
-  return Math.floor(bs) <= Math.floor(s1) ? { placed: cur, front: bf } : { placed, front };
+  // Refusé si moins conforme, ou si l'étalement déséquilibre nettement les essieux.
+  return Math.floor(bs) <= Math.floor(s1) && bs <= s1 + 0.05 ? { placed: cur, front: bf } : { placed, front };
 }
 
 type Best = { pen: number; placed: Placed[]; rejected: { item: Item; reason: string }[]; front: number };
@@ -191,14 +194,20 @@ export function balanceOpen(sp: OpenSpace, items: Item[], locked: Placed[], ctx:
   const zones = sp.zones.map((z) => ({ x: z.x, l: z.l }));
   const floor = (p: Placed) => sp.zones[p.zi ?? 0].z;
   let best: Best | null = null;
-  for (const sort of SORTS) {
-    const packed = packOpen(sp, items, { sort, fixed: locked });
-    const base = ctx.override ? spill(packed, spillDims(sp)) : packed;
-    for (const front of slides(ctx)) {
-      const r = shiftOptimize(base.placed, zones, (p) => score(p, ctx, front), floor);
-      const pen = r.score + base.rejected.length * 1e8;
-      if (!best || pen < best.pen) best = { pen, placed: r.placed, rejected: base.rejected, front };
+  // Plancher d'abord (charge étalée, rien d'empilé tant qu'il reste du plancher). L'empilage serré n'est retenu
+  // que s'il place plus de pièces ou réduit un dépassement réglementaire.
+  for (const floorFirst of [true, false]) {
+    let cand: Best | null = null;
+    for (const zoneOrder of (sp.zones.length > 1 ? ['low', 'front'] : ['low']) as ('low' | 'front')[]) for (const sort of SORTS) {
+      const packed = packOpen(sp, items, { sort, fixed: locked, floorFirst, zoneOrder });
+      const base = ctx.override ? spill(packed, spillDims(sp)) : packed;
+      for (const front of slides(ctx)) {
+        const r = shiftOptimize(base.placed, zones, (p) => score(p, ctx, front), floor);
+        const pen = r.score + base.rejected.length * 1e8;
+        if (!cand || pen < cand.pen) cand = { pen, placed: r.placed, rejected: base.rejected, front };
+      }
     }
+    if (cand && (!best || Math.floor(cand.pen) < Math.floor(best.pen))) best = cand;
   }
   const b = best as Best;
   const sp2 = spreadSmall(b.placed, zones, ctx, b.front, floor);

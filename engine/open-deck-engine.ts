@@ -10,7 +10,7 @@ export type OpenSpace = { zones: Zone[]; legalH: number; legalW: number; maxKg: 
 
 export function packOpen(sp: OpenSpace, items: Item[], opts: PackOpts = {}) {
   const fixedAll = opts.fixed ?? [];
-  const zones = sp.zones.map((z, i) => ({ ...z, i })).sort((a, b) => a.z - b.z || a.x - b.x);
+  const zones = sp.zones.map((z, i) => ({ ...z, i })).sort((a, b) => (opts.zoneOrder === 'front' ? a.x - b.x || a.z - b.z : a.z - b.z || a.x - b.x));
   let left = [...items];
   let kgLeft = sp.maxKg - fixedAll.reduce((s, f) => s + f.kg, 0);
   const placed: Placed[] = [];
@@ -29,7 +29,7 @@ export function packOpen(sp: OpenSpace, items: Item[], opts: PackOpts = {}) {
 
     const fixedKgZ = fixedZ.reduce((s, f) => s + f.kg, 0);
     const fixedLocal = fixedZ.map((f) => ({ ...f, x: f.x - z.x, y: f.y + shift, z: f.z - z.z }));
-    const r = pack({ l: z.l, w, h, maxKg: kgLeft + fixedKgZ }, left, { sort: opts.sort, fixed: fixedLocal });
+    const r = pack({ l: z.l, w, h, maxKg: kgLeft + fixedKgZ }, left, { sort: opts.sort, fixed: fixedLocal, floorFirst: opts.floorFirst });
 
     // Décalage uniforme : garde les pièces sans chevauchement. Si la zone a été élargie, celles du bord débordent.
     for (const p of r.placed) placed.push({ ...p, x: p.x + z.x, y: p.y - shift, z: p.z + z.z, seq: placed.length + 1, zi: z.i });
@@ -78,33 +78,71 @@ export function openFlags(placed: Placed[], sp: OpenSpace) {
 // À valider avec l'édition en vigueur (le guide est indicatif).
 export type SecOpts = { wllKg: number; front?: { heightMm: number } | null; zones: { x: number; z: number }[] };
 export const MACHINE_MIN_KG = 4500, MACHINE_MIN_WLL = 2268, MACHINE_MIN_N = 4;
+
+// Rangs d'arrimage : les pièces côte à côte (ou empilées) dans la même zone sont attachées ensemble.
+// Deux pièces font partie du même rang si elles se chevauchent sur au moins la moitié de la longueur de la plus courte.
+// Une machine de 4 500 kg et plus reste seule (4 attaches directes), tout comme une pièce posée hors de la remorque.
+const isHeavy = (p: Placed) => p.type === 'machine' && p.kg >= MACHINE_MIN_KG;
+export function securementRows(placed: Placed[]): Placed[][] {
+  const rows: Placed[][] = [];
+  const pool = placed.filter((p) => !p.over && !isHeavy(p));
+  const done = new Set<Placed>();
+  for (const p of placed) {
+    if (p.over || isHeavy(p)) { rows.push([p]); continue; }
+    if (done.has(p)) continue;
+    const row = [p];
+    done.add(p);
+    for (let i = 0; i < row.length; i++) {
+      for (const q of pool) {
+        if (done.has(q) || (q.zi ?? 0) !== (row[i].zi ?? 0)) continue;
+        const o = Math.min(row[i].x + row[i].pl, q.x + q.pl) - Math.max(row[i].x, q.x);
+        if (o >= 0.5 * Math.min(row[i].pl, q.pl)) { done.add(q); row.push(q); }
+      }
+    }
+    rows.push(row);
+  }
+  return rows.sort((a, b) => Math.min(...a.map((p) => p.x)) - Math.min(...b.map((p) => p.x)));
+}
+
+// Une ligne par rang : le nombre d'attaches se calcule sur la longueur et le poids combinés du rang
+// (2 pièces de 2 268 kg côte à côte = 4 536 kg à retenir).
 export function securement(placed: Placed[], o: SecOpts) {
   const first = o.zones.reduce((bi, z, i, a) => (z.x < a[bi].x ? i : bi), 0);
-  return placed.map((p) => {
-    const zi = p.zi ?? 0, z = o.zones[zi] ?? o.zones[0];
+  return securementRows(placed).map((row) => {
+    const zi = row[0].zi ?? 0, z = o.zones[zi] ?? o.zones[0];
     const notes: string[] = [];
     let warn = false;
+    const lo = Math.min(...row.map((p) => p.x)), hi = Math.max(...row.map((p) => p.x + p.pl));
+    const len = hi - lo, kg = row.reduce((s, p) => s + p.kg, 0);
+    const floor = row.filter((p) => Math.abs(p.z - z.z) < 5);
     // calage automatique : pièce posée sur le plancher, collée à la poutre frontale
-    let auto = false;
-    if (o.front && zi === first && Math.abs(p.z - z.z) < 5 && Math.abs(p.x - o.zones[first].x) <= 25) {
+    const autoOf = (p: Placed) => {
+      if (!o.front || zi !== first || Math.abs(p.x - o.zones[first].x) > 25) return false;
       const need = Math.min(p.h, 1220);
-      if (o.front.heightMm >= need) auto = true;
-      else { notes.push(`poutre frontale trop basse (min. ${need} mm)`); warn = true; }
-    }
-    const blocked = !!p.blocked || auto;
+      if (o.front.heightMm >= need) return true;
+      notes.push(`${p.id} : poutre frontale trop basse (min. ${need} mm)`); warn = true;
+      return false;
+    };
+    const autos = floor.map(autoOf);
+    const auto = floor.length > 0 && autos.every(Boolean);
+    const blocked = floor.length > 0 && floor.every((p, i) => !!p.blocked || autos[i]);
     if (auto) notes.push('calée contre la poutre frontale');
-    else if (p.blocked) notes.push('calage déclaré, à confirmer');
+    else if (blocked) notes.push('calage déclaré, à confirmer');
+    if (row.length > 1) notes.push(`rang de ${row.length} pièces attachées ensemble : poids combiné ${kg} kg`);
     const byLen = blocked
-      ? (p.pl <= 3040 ? 1 : 1 + Math.ceil((p.pl - 3040) / 3040))
-      : (p.pl <= 1520 ? (p.kg <= 500 ? 1 : 2) : p.pl <= 3040 ? 2 : 2 + Math.ceil((p.pl - 3040) / 3040));
-    const byWll = Math.ceil((0.5 * p.kg) / o.wllKg - 1e-9);
-    const heavy = p.type === 'machine' && p.kg >= MACHINE_MIN_KG;
+      ? (len <= 3040 ? 1 : 1 + Math.ceil((len - 3040) / 3040))
+      : (len <= 1520 ? (kg <= 500 ? 1 : 2) : len <= 3040 ? 2 : 2 + Math.ceil((len - 3040) / 3040));
+    const byWll = Math.ceil((0.5 * kg) / o.wllKg - 1e-9);
+    const heavy = isHeavy(row[0]);
+    const machine = row.length === 1 && row[0].type === 'machine';
     if (heavy) {
       notes.push(`machine de 4 500 kg et plus : 4 attaches minimum, chacune d'au moins ${MACHINE_MIN_WLL} kg`);
       if (o.wllKg < MACHINE_MIN_WLL) { notes.push(`attache choisie sous ${MACHINE_MIN_WLL} kg`); warn = true; }
-    } else if (p.type === 'machine') notes.push('machine sous 4 500 kg : règles générales');
+    } else if (machine) notes.push('machine sous 4 500 kg : règles générales');
     const byType = heavy ? MACHINE_MIN_N : 0;
-    return { id: p.id, name: p.name, type: p.type ?? 'colis', blocked, auto, byLen, byWll, byType, n: Math.max(byLen, byWll, byType), notes, warn };
+    const ids = row.map((p) => p.id);
+    return { id: ids.join(' + '), ids, name: row.length === 1 ? row[0].name : `(rang de ${row.length} pièces)`, kg, lenMm: len,
+      type: machine ? 'machine' : 'colis', blocked, auto, byLen, byWll, byType, n: Math.max(byLen, byWll, byType), notes, warn };
   });
 }
 

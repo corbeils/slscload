@@ -12,6 +12,8 @@ export type Limits = { steer: number; drive: number; trailer: number };
 export type PackOpts = {
   sort?: 'area' | 'kgdesc' | 'kgasc'; // critère secondaire (l'arrêt reste prioritaire)
   fixed?: Placed[];                    // pièces verrouillées, en coordonnées locales de l'espace
+  zoneOrder?: 'low' | 'front';         // plateaux à plusieurs niveaux : remplir le niveau le plus bas d'abord, ou de l'avant vers l'arrière
+  floorFirst?: boolean;                // plancher d'abord : on n'empile que s'il ne reste plus de place au plancher
 };
 
 import { RegCtx, classifyRear, groupLimit } from './regulations-qc';
@@ -113,7 +115,8 @@ export function pack(space: Space, items: Item[], opts: PackOpts = {}) {
       return z === 0 || support >= 0.7 * pl * pw;
     };
 
-    eps.sort((a, b) => a[0] - b[0] || a[2] - b[2] || a[1] - b[1]);
+    if (opts.floorFirst) eps.sort((a, b) => a[2] - b[2] || a[0] - b[0] || a[1] - b[1]);
+    else eps.sort((a, b) => a[0] - b[0] || a[2] - b[2] || a[1] - b[1]);
     let hit: { p: number[]; pl: number; pw: number } | null = null;
     outer: for (const p of eps) for (const [pl, pw] of rots) if (fits(p, pl, pw)) { hit = { p, pl, pw }; break outer; }
 
